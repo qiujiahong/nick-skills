@@ -17,6 +17,6 @@ OpenClaw Agent Skills 集合。
 ### voice-tts
 
 ```bash
-export VOICE_TTS_API_KEY="your-api-key"
-export VOICE_TTS_VOICE_TYPE="S_xxxxxxxx"  # 可选，默认音色
+export NICK_SKILLS_ENV_VOICE_TTS_API_KEY="your-api-key"
+export NICK_SKILLS_ENV_VOICE_TTS_VOICE_TYPE="S_xxxxxxxx"  # 可选，默认音色
 ```

@@ -22,9 +22,9 @@ API_URL = "https://openspeech.bytedance.com/api/v1/tts"
 
 def synthesize(text: str, voice_type: str, cluster: str, encoding: str, speed: float) -> bytes:
     """Call TTS API and return audio bytes."""
-    api_key = os.environ.get("VOICE_TTS_API_KEY")
+    api_key = os.environ.get("NICK_SKILLS_ENV_VOICE_TTS_API_KEY")
     if not api_key:
-        print("Error: VOICE_TTS_API_KEY environment variable not set", file=sys.stderr)
+        print("Error: NICK_SKILLS_ENV_VOICE_TTS_API_KEY environment variable not set", file=sys.stderr)
         sys.exit(1)
 
     payload = {
@@ -87,8 +87,8 @@ def main():
 
     args = parser.parse_args()
 
-    voice = args.voice or os.environ.get("VOICE_TTS_VOICE_TYPE", "BV001_V2")
-    cluster = args.cluster or os.environ.get("VOICE_TTS_CLUSTER", "volcano_icl")
+    voice = args.voice or os.environ.get("NICK_SKILLS_ENV_VOICE_TTS_VOICE_TYPE", "BV001_V2")
+    cluster = args.cluster or os.environ.get("NICK_SKILLS_ENV_VOICE_TTS_CLUSTER", "volcano_icl")
 
     print(f"Synthesizing with voice: {voice}, cluster: {cluster}", file=sys.stderr)
     print(f"Text: {args.text[:80]}{'...' if len(args.text) > 80 else ''}", file=sys.stderr)
