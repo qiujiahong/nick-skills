@@ -1,6 +1,6 @@
 ---
 name: voice-tts
-description: 火山引擎语音合成（支持声音复刻音色）。当用户要求语音合成、文字转语音、TTS、用克隆声音朗读时使用此 skill。支持语速、语调、情感控制和 SSML。
+description: 火山引擎语音合成（支持声音复刻音色）。当用户要求语音合成、文字转语音、TTS、用克隆声音朗读时使用此 skill。支持语速、语调、情感控制。
 ---
 
 # 语音合成 (Voice TTS)
@@ -31,21 +31,20 @@ python3 scripts/tts.py "要合成的文本" \
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `text`（必填） | 要合成的文本（或 SSML） | — |
+| `text`（必填） | 要合成的文本 | — |
 | `--voice, -v` | 音色 ID | 环境变量或 `BV001_V2` |
 | `--output, -o` | 输出文件路径 | `tts_output.mp3` |
 | `--speed, -s` | 语速（0.5~2.0） | `1.0` |
 | `--pitch, -p` | 语调（0.5~2.0），>1 偏高 <1 偏低 | `1.0` |
 | `--emotion` | 情感标签 | 无 |
-| `--ssml` | 输入为 SSML 格式 | 关 |
 | `--encoding, -e` | 音频格式（mp3/wav/ogg_opus） | `mp3` |
 | `--cluster, -c` | 集群名称 | 环境变量或 `volcano_icl` |
 
 ## 语气与情感控制
 
-### 方式一：emotion 参数（简单）
+### 方式一：emotion 参数（推荐）
 
-直接指定情感标签：
+直接指定情感标签，API 原生支持：
 
 | 标签 | 情感 |
 |------|------|
@@ -62,7 +61,7 @@ python3 scripts/tts.py "太棒了，我好开心！" --emotion happy
 python3 scripts/tts.py "这件事让我很难过。" --emotion sad --pitch 0.9 --speed 0.8
 ```
 
-### 方式二：pitch + speed 组合（灵活）
+### 方式二：pitch + speed 组合
 
 通过调节语调和语速模拟不同语气：
 
@@ -74,29 +73,7 @@ python3 scripts/tts.py "这件事让我很难过。" --emotion sad --pitch 0.9 -
 | 急促紧张 | 1.4 | 1.1 |
 | 庄重播报 | 0.85 | 0.95 |
 
-### 方式三：SSML（精细控制）
-
-SSML 可以在同一段文本中混合不同的语气、停顿、语速：
-
-```bash
-python3 scripts/tts.py '<speak>
-<emotion category="happy" intensity="1.0">今天天气真不错！</emotion>
-<break time="500ms"/>
-<prosody rate="slow" pitch="low">不过明天可能会下雨。</prosody>
-<break time="300ms"/>
-<prosody rate="fast" pitch="high">赶紧出去玩吧！</prosody>
-</speak>' --ssml
-```
-
-#### SSML 常用标签
-
-| 标签 | 作用 | 示例 |
-|------|------|------|
-| `<speak>` | 根标签 | `<speak>...</speak>` |
-| `<emotion>` | 情感控制 | `<emotion category="happy" intensity="1.0">开心</emotion>` |
-| `<prosody>` | 语速/音调 | `<prosody rate="fast" pitch="high">快说</prosody>` |
-| `<break>` | 停顿 | `<break time="500ms"/>` |
-| `<say-as>` | 特殊读法 | `<say-as interpret-as="digits">123</say-as>` |
+> **注意**：`volcano_icl` 集群不支持 SSML 的 `<emotion>` 和 `<prosody>` 标签（会被当作文字朗读）。请使用上述两种方式控制语气。
 
 ## 常用音色
 
@@ -124,7 +101,7 @@ python3 scripts/tts.py '<speak>
 ## 工作流程
 
 1. **接收文本** — 用户提供要朗读的文字
-2. **确定语气** — 根据语境选择 emotion / pitch / speed 或 SSML
+2. **确定语气** — 根据语境选择 emotion 或 pitch/speed 组合
 3. **调用脚本** — 执行 `scripts/tts.py` 生成音频
 4. **发送音频** — 上传到飞书并发送文件消息
 
@@ -140,8 +117,8 @@ python3 scripts/tts.py "太好了！我们成功了！" --emotion happy --speed 
 # 低沉叙述
 python3 scripts/tts.py "那是一个寒冷的冬夜..." --pitch 0.85 --speed 0.85
 
-# SSML 混合语气
-python3 scripts/tts.py '<speak><prosody rate="slow">很久很久以前</prosody><break time="500ms"/><emotion category="surprise">突然出现了一条龙！</emotion></speak>' --ssml
+# 急促紧张
+python3 scripts/tts.py "快跑！来不及了！" --speed 1.4 --pitch 1.1
 
 # 输出 wav 格式
 python3 scripts/tts.py "测试音频" --encoding wav --output test.wav
