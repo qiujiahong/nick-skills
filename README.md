@@ -6,7 +6,8 @@ OpenClaw Agent Skills 集合。
 
 | Skill | 描述 |
 |-------|------|
-| [voice-tts](skills/voice-tts/) | 火山引擎语音合成，支持声音复刻音色 |
+| [voice-tts](skills/voice-tts/) | 火山引擎语音合成，支持声音复刻音色、情感/语速/语调控制 |
+| [voice-director](skills/voice-director/) | 语音导演，AI 自动为台词标注情感和语速语调 |
 
 ## 使用方法
 
