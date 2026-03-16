@@ -59,6 +59,8 @@ systemctl --user restart openclaw-gateway
 openclaw gateway restart
 ```
 
+**注意：** 重启 gateway 时，当前执行会话可能因服务重启收到 `SIGTERM`。这不一定代表重启失败；重启后要再次用 `openclaw gateway status` 或 `systemctl --user is-active openclaw-gateway` 复查。
+
 ## 4. OAuth Login Flow
 
 使用以下命令发起登录（不要用 proxychains）：
@@ -130,7 +132,20 @@ cat ~/.openclaw/openclaw.json | jq '.agents.defaults.models'
 4. gateway 是否在改配置后**重启过**
 5. 目标账号是否有可用 Codex 配额
 
-### 情况 C：proxychains 输出噪音太大
+### 情况 C：callback 粘贴后出现 `TypeError: fetch failed`
+
+不要立刻判定为代理配置错误。先单独验证 Node 原生代理连通性：
+
+```bash
+HTTPS_PROXY=http://127.0.0.1:7890 HTTP_PROXY=http://127.0.0.1:7890 \
+  node --use-env-proxy -e "fetch('https://auth.openai.com/.well-known/openid-configuration').then(r=>r.json()).then(d=>console.log('OK',d.issuer)).catch(e=>console.error('FAIL',e.message))"
+```
+
+处理规则：
+- 如果输出 `OK ...`：优先**整轮重新发起 OAuth**，重新拿新的 OAuth URL 和新的 callback URL；**不要复用旧 callback URL / 旧 state**。
+- 如果输出 `FAIL ...`：再回头排查 Clash、7890、美国出口、OpenAI 域名可达性、`NODE_OPTIONS=--use-env-proxy` 是否真的生效。
+
+### 情况 D：proxychains 输出噪音太大
 
 - 首选 `node --use-env-proxy` + 环境变量
 - `proxychains4` 仅作为最后备选
