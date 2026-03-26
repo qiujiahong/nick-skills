@@ -1,40 +1,81 @@
 # nick-skills
 
-OpenClaw Agent Skills 集合。
+OpenClaw / Codex 可复用技能集合，包含图像生成、视频生成、语音合成、语音导演，以及 OpenClaw 团队配置类 skill。
 
-## 技能列表
+## 目录结构
+
+```text
+skills/
+  image-gen/
+  video-gen/
+  voice-tts/
+  voice-director/
+  openclaw-team-setup/
+  openclaw-codex-account-switch/
+dist/
+```
+
+`skills/` 下是可直接使用的 skill 源码目录，`dist/` 下是已打包产物。
+
+## Skill 列表
 
 | Skill | 描述 |
 |-------|------|
-| [image-gen](skills/image-gen/) | AI 图像生成与编辑，支持文生图、图+文生图、风格转换，多比例与标准/2K/4K 分辨率 |
-| [video-gen](skills/video-gen/) | AI 视频生成与编辑，使用火山引擎 Doubao Seedance，支持文生视频、图生视频、有声视频 |
-| [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/) | 指导在 Linux + OpenClaw + Clash Meta 环境中切换/重配 OpenAI Codex 账号，并完成端到端验证 |
-| [voice-tts](skills/voice-tts/) | 火山引擎语音合成，支持声音复刻音色、情感/语速/语调控制 |
-| [voice-director](skills/voice-director/) | 语音导演，AI 自动为台词标注情感和语速语调 |
+| [image-gen](skills/image-gen/) | AI 图像生成与编辑，支持文生图、图+文生图、风格转换，多比例与标准 / 2K / 4K 分辨率 |
+| [video-gen](skills/video-gen/) | AI 视频生成与编辑，基于火山引擎 Doubao Seedance，支持文生视频、图生视频、有声视频 |
+| [voice-tts](skills/voice-tts/) | 火山引擎语音合成，支持声音复刻音色、语速 / 语调 / 情感控制 |
+| [voice-director](skills/voice-director/) | 用 LLM 为台词自动标注情感、语速、语调，再交给 `voice-tts` 合成 |
+| [openclaw-team-setup](skills/openclaw-team-setup/) | 标准化配置或修复 OpenClaw 多智能体团队，覆盖 agent 拓扑、ACP、Feishu 路由与验证 |
+| [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/) | 在 OpenClaw 环境中切换或重配 OpenAI Codex 账号，并完成登录与连通性验收 |
 
-## 使用方法
+## 安装方式
 
-将 `skills/` 下的技能目录复制到 OpenClaw 的 skills 目录中即可使用。
+按需将目标 skill 目录复制或链接到你的 OpenClaw skills 目录中即可。
+
+```bash
+cp -R skills/<skill-name> /path/to/openclaw/skills/
+```
+
+如果你的环境支持打包分发，也可以直接使用 `dist/` 下的产物。
 
 ## 环境变量
+
+不同 skill 使用不同环境变量：
 
 ### image-gen
 
 ```bash
 export IMAGE_GEN_API_KEY="your-api-key"
-export IMAGE_GEN_BASE_URL="https://code.newcli.com/gemini"  # 可选
+export IMAGE_GEN_BASE_URL="https://code.newcli.com/gemini"
 ```
 
 ### video-gen
 
 ```bash
 export VIDEO_GEN_API_KEY="your-api-key"
-export VIDEO_GEN_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"  # 可选
+export VIDEO_GEN_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
 ```
 
 ### voice-tts
 
 ```bash
 export NICK_SKILLS_ENV_VOICE_TTS_API_KEY="your-api-key"
-export NICK_SKILLS_ENV_VOICE_TTS_VOICE_TYPE="S_xxxxxxxx"  # 可选，默认音色
+export NICK_SKILLS_ENV_VOICE_TTS_VOICE_TYPE="S_xxxxxxxx"
+export NICK_SKILLS_ENV_VOICE_TTS_CLUSTER="volcano_icl"
 ```
+
+### voice-director
+
+```bash
+export NICK_SKILLS_ENV_DIRECTOR_API_KEY="your-api-key"
+export NICK_SKILLS_ENV_DIRECTOR_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
+export NICK_SKILLS_ENV_DIRECTOR_MODEL="doubao-1.5-pro-256k"
+```
+
+## 使用建议
+
+- 图像生成直接看 [image-gen](skills/image-gen/)。
+- 视频生成直接看 [video-gen](skills/video-gen/)。
+- 需要更有表现力的配音时，先用 [voice-director](skills/voice-director/) 标注，再用 [voice-tts](skills/voice-tts/) 合成。
+- 需要搭建或修复 OpenClaw 项目团队时，使用 [openclaw-team-setup](skills/openclaw-team-setup/)。
+- 需要切换 OpenClaw 上的 Codex OAuth 账号时，使用 [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/)。
