@@ -2,16 +2,18 @@
 """
 AI Image Generation Script
 Uses Gemini Flash Image Preview model via generateContent API.
+Supports text-to-image, image-to-image, and multi-image prompting.
 Falls back to curl for better compatibility with some upstream gateways.
 """
 import os
 import sys
 import json
 import base64
+import mimetypes
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
@@ -20,6 +22,12 @@ BASE_URL = os.environ.get("IMAGE_GEN_BASE_URL", "https://api.apiyi.com")
 DEFAULT_MODEL = os.environ.get("IMAGE_GEN_MODEL", "gemini-3.1-flash-image-preview")
 DEFAULT_ASPECT_RATIO = os.environ.get("IMAGE_GEN_ASPECT_RATIO", "16:9")
 DEFAULT_IMAGE_SIZE = os.environ.get("IMAGE_GEN_IMAGE_SIZE", "2K")
+ALLOWED_ASPECT_RATIOS = {
+    "1:1", "1:4", "4:1", "1:8", "8:1",
+    "2:3", "3:2", "3:4", "4:3", "4:5", "5:4",
+    "9:16", "16:9", "21:9",
+}
+ALLOWED_IMAGE_SIZES = {"standard", "2K", "4K"}
 
 
 def _call_api_with_curl(url: str, payload: dict) -> dict:
@@ -90,22 +98,69 @@ def call_api(url: str, payload: dict) -> dict:
     raise RuntimeError("; ".join(errors))
 
 
+def validate_args(aspect_ratio: str, image_size: str, input_images: List[str]) -> None:
+    if aspect_ratio not in ALLOWED_ASPECT_RATIOS:
+        print(
+            f"ERROR: Unsupported aspect ratio '{aspect_ratio}'. Allowed: {', '.join(sorted(ALLOWED_ASPECT_RATIOS))}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if image_size not in ALLOWED_IMAGE_SIZES:
+        print(
+            f"ERROR: Unsupported image size '{image_size}'. Allowed: standard, 2K, 4K",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    for image_path in input_images:
+        if not Path(image_path).is_file():
+            print(f"ERROR: Input image not found: {image_path}", file=sys.stderr)
+            sys.exit(1)
+
+
+def encode_image_part(image_path: str) -> dict:
+    path = Path(image_path)
+    mime_type, _ = mimetypes.guess_type(str(path))
+    if not mime_type:
+        mime_type = "image/png"
+
+    return {
+        "inlineData": {
+            "mimeType": mime_type,
+            "data": base64.b64encode(path.read_bytes()).decode("utf-8"),
+        }
+    }
+
+
+def build_parts(prompt: str, input_images: List[str]) -> List[dict]:
+    parts: List[dict] = []
+    for image_path in input_images:
+        parts.append(encode_image_part(image_path))
+    parts.append({"text": prompt})
+    return parts
+
+
 def generate_image(
     prompt: str,
     model: str = DEFAULT_MODEL,
     output_path: Optional[str] = None,
     aspect_ratio: str = DEFAULT_ASPECT_RATIO,
     image_size: str = DEFAULT_IMAGE_SIZE,
+    input_images: Optional[List[str]] = None,
 ) -> str:
-    """Generate image from text prompt."""
+    """Generate image from text prompt with optional input image(s)."""
 
     if not API_KEY:
         print("ERROR: IMAGE_GEN_API_KEY not set", file=sys.stderr)
         sys.exit(1)
 
+    input_images = input_images or []
+    validate_args(aspect_ratio, image_size, input_images)
+
     url = f"{BASE_URL}/v1beta/models/{model}:generateContent"
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
+        "contents": [{"parts": build_parts(prompt, input_images)}],
         "generationConfig": {
             "responseModalities": ["IMAGE"],
             "imageConfig": {
@@ -115,7 +170,14 @@ def generate_image(
         },
     }
 
+    mode = "text-to-image"
+    if len(input_images) == 1:
+        mode = "image-to-image"
+    elif len(input_images) > 1:
+        mode = f"multi-image ({len(input_images)} images)"
+
     print(f"Generating image with model: {model}", file=sys.stderr)
+    print(f"Mode: {mode}", file=sys.stderr)
     print(f"Aspect ratio: {aspect_ratio}, image size: {image_size}", file=sys.stderr)
     print(f"Prompt: {prompt[:120]}...", file=sys.stderr)
 
@@ -160,8 +222,18 @@ if __name__ == "__main__":
     parser.add_argument("prompt", help="Text prompt for image generation")
     parser.add_argument("--model", "-m", default=DEFAULT_MODEL, help="Model to use")
     parser.add_argument("--output", "-o", help="Output file path")
-    parser.add_argument("--aspect-ratio", default=DEFAULT_ASPECT_RATIO, help="Aspect ratio, e.g. 1:1, 3:2, 16:9")
-    parser.add_argument("--image-size", default=DEFAULT_IMAGE_SIZE, help="Image size, e.g. standard, 2K, 4K")
+    parser.add_argument(
+        "--aspect-ratio",
+        default=DEFAULT_ASPECT_RATIO,
+        help="Aspect ratio. Supported: 1:1, 1:4, 4:1, 1:8, 8:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9",
+    )
+    parser.add_argument("--image-size", default=DEFAULT_IMAGE_SIZE, help="Image size: standard, 2K, 4K")
+    parser.add_argument(
+        "--input-image",
+        action="append",
+        default=[],
+        help="Optional input image path. Repeat this flag for image-to-image or multi-image prompting.",
+    )
     args = parser.parse_args()
 
     generate_image(
@@ -170,4 +242,5 @@ if __name__ == "__main__":
         output_path=args.output,
         aspect_ratio=args.aspect_ratio,
         image_size=args.image_size,
+        input_images=args.input_image,
     )

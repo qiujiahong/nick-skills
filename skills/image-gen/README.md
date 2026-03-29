@@ -1,6 +1,12 @@
 # image-gen
 
-AI 图像生成 Skill，基于 Gemini Flash Image 模型，支持文生图、图+文生图、多比例、多分辨率。
+AI 图像生成 Skill，基于 Gemini Flash Image Preview 模型，支持：
+
+- 文生图
+- 图生图
+- 多图输入
+- 多比例
+- 多分辨率
 
 ## 安装
 
@@ -18,7 +24,6 @@ git clone git@github.com:qiujiahong/image-gen.git ai-image-gen
 ### Claude Code
 
 ```bash
-# 克隆到 Claude Code 的 skills 目录
 cd ~/.claude/skills
 git clone git@github.com:qiujiahong/image-gen.git ai-image-gen
 ```
@@ -26,14 +31,13 @@ git clone git@github.com:qiujiahong/image-gen.git ai-image-gen
 ### OpenCode
 
 ```bash
-# 克隆到 OpenCode 的 skills 目录
 cd ~/.opencode/skills
 git clone git@github.com:qiujiahong/image-gen.git ai-image-gen
 ```
 
 ## 环境变量配置
 
-使用前需配置以下环境变量（**不要硬编码到代码中**）：
+使用前需配置以下环境变量（不要硬编码到代码中）：
 
 ```bash
 IMAGE_GEN_API_KEY=your-api-key
@@ -43,21 +47,77 @@ IMAGE_GEN_ASPECT_RATIO=16:9
 IMAGE_GEN_IMAGE_SIZE=2K
 ```
 
-## 获取 API Key
+## 支持的比例
 
-推荐使用 FoxCode 中转服务，注册地址：
+- `1:1`
+- `1:4`
+- `4:1`
+- `1:8`
+- `8:1`
+- `2:3`
+- `3:2`
+- `3:4`
+- `4:3`
+- `4:5`
+- `5:4`
+- `9:16`
+- `16:9`
+- `21:9`
 
-👉 [https://foxcode.rjj.cc/auth/register?aff=R0P5ZY](https://foxcode.rjj.cc/auth/register?aff=R0P5ZY)
+## 支持的分辨率
 
-注册后在控制台获取 API Key 和 Base URL。
+- `standard`
+- `2K`
+- `4K`
 
-## 支持的模型
+## 用法
 
-- 基础（标准分辨率）：1:1、3:2、2:3、3:4、4:3、4:5、5:4、9:16、16:9、21:9
-- 2K 分辨率：同上所有比例
-- 4K 分辨率：同上所有比例（不含 21:9）
+### 文生图
 
-默认模型：`gemini-3.1-flash-image-2k-16x9`
+```bash
+python3 scripts/generate_image.py \
+  "一只可爱的柴犬坐在樱花树下，水彩画风格" \
+  --aspect-ratio 16:9 \
+  --image-size 2K \
+  --output output.png
+```
+
+### 图生图
+
+```bash
+python3 scripts/generate_image.py \
+  "保留主体构图，改成吉卜力风格，色彩更柔和" \
+  --input-image reference.png \
+  --aspect-ratio 3:4 \
+  --image-size 2K \
+  --output output.png
+```
+
+### 多图输入
+
+```bash
+python3 scripts/generate_image.py \
+  "结合这几张参考图的构图、服装和配色，生成一张统一风格的新海报" \
+  --input-image ref1.png \
+  --input-image ref2.jpg \
+  --input-image ref3.webp \
+  --aspect-ratio 4:5 \
+  --image-size 2K \
+  --output output.png
+```
+
+## 参数
+
+- `prompt`：提示词
+- `--model`：模型名，默认 `gemini-3.1-flash-image-preview`
+- `--aspect-ratio`：比例
+- `--image-size`：尺寸
+- `--input-image`：输入图，可重复使用
+- `--output`：输出文件路径
+
+## 默认模型
+
+- `gemini-3.1-flash-image-preview`
 
 ## License
 
