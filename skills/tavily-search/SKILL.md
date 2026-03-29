@@ -27,6 +27,7 @@ export TAVILY_SEARCH_BASE_URL="https://api.tavily.com"
 - 随机选择一个 key 开始请求
 - 如果当前 key 鉴权失败、过期、额度异常或返回 401/403/429，会自动尝试其他 key
 - 支持限制结果条数、主题、时间范围、是否抓取正文
+- 支持指定包含/排除的搜索域名
 - 输出结构化 JSON，方便后续 agent 二次处理
 
 ## 使用方法
@@ -48,6 +49,8 @@ python3 scripts/tavily_search.py "OpenClaw ACP runtime sessions" \
 - `--days`：仅新闻主题时可选，限制最近多少天
 - `--include-answer`：让 Tavily 返回总结答案
 - `--include-raw-content`：抓取原文正文
+- `--include-domains`：只搜指定域名，逗号分隔
+- `--exclude-domains`：排除指定域名，逗号分隔
 - `--output`：保存 JSON 到文件
 
 ## 工作流程
@@ -70,4 +73,10 @@ python3 scripts/tavily_search.py "OpenClaw ACP runtime sessions" \
 
 ```bash
 python3 scripts/tavily_search.py "Tavily API pricing" --topic general --max-results 3
+```
+
+指定搜索站点：
+
+```bash
+python3 scripts/tavily_search.py "AI" --topic news --include-domains techcrunch.com,theverge.com --max-results 5
 ```

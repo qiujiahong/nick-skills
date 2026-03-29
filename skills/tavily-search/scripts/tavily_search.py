@@ -39,6 +39,17 @@ def parse_keys() -> List[str]:
     return deduped
 
 
+def parse_csv_list(value: str) -> List[str]:
+    if not value:
+        return []
+    items = []
+    for part in value.replace("\n", ",").split(","):
+        item = part.strip()
+        if item:
+            items.append(item)
+    return items
+
+
 def build_payload(args: argparse.Namespace) -> dict:
     payload = {
         "query": args.query,
@@ -51,6 +62,13 @@ def build_payload(args: argparse.Namespace) -> dict:
     }
     if args.days is not None:
         payload["days"] = args.days
+
+    include_domains = parse_csv_list(args.include_domains)
+    exclude_domains = parse_csv_list(args.exclude_domains)
+    if include_domains:
+        payload["include_domains"] = include_domains
+    if exclude_domains:
+        payload["exclude_domains"] = exclude_domains
     return payload
 
 
@@ -148,6 +166,8 @@ def main() -> int:
     parser.add_argument("--include-answer", action="store_true")
     parser.add_argument("--include-raw-content", action="store_true")
     parser.add_argument("--include-images", action="store_true")
+    parser.add_argument("--include-domains", default="", help="Comma-separated domains to include, e.g. techcrunch.com,theverge.com")
+    parser.add_argument("--exclude-domains", default="", help="Comma-separated domains to exclude")
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--output", help="Optional output JSON file path")
     args = parser.parse_args()

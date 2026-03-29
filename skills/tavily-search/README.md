@@ -8,6 +8,7 @@ Tavily 搜索 skill。
 - 每次请求随机从某个 key 开始
 - key 失效、401/403/429 时自动回退到其他 key
 - 可选 general/news 主题
+- 支持 include/exclude domains
 - 输出结构化 JSON
 
 ## 环境变量
@@ -23,6 +24,12 @@ export TAVILY_SEARCH_BASE_URL="https://api.tavily.com"
 
 ```bash
 python3 scripts/tavily_search.py "OpenClaw skills" --max-results 5
+```
+
+指定站点范围：
+
+```bash
+python3 scripts/tavily_search.py "AI" --topic news --include-domains techcrunch.com,theverge.com --max-results 5
 ```
 
 保存到文件：
