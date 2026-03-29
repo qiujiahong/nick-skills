@@ -48,7 +48,10 @@ cp -R skills/<skill-name> /path/to/openclaw/skills/
 
 ```bash
 export IMAGE_GEN_API_KEY="your-api-key"
-export IMAGE_GEN_BASE_URL="https://code.newcli.com/gemini"
+export IMAGE_GEN_BASE_URL="https://api.apiyi.com"
+export IMAGE_GEN_MODEL="gemini-3.1-flash-image-preview"
+export IMAGE_GEN_ASPECT_RATIO="16:9"
+export IMAGE_GEN_IMAGE_SIZE="2K"
 ```
 
 ### video-gen

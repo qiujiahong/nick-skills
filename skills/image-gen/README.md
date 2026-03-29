@@ -37,7 +37,10 @@ git clone git@github.com:qiujiahong/image-gen.git ai-image-gen
 
 ```bash
 IMAGE_GEN_API_KEY=your-api-key
-IMAGE_GEN_BASE_URL=your-base-url
+IMAGE_GEN_BASE_URL=https://api.apiyi.com
+IMAGE_GEN_MODEL=gemini-3.1-flash-image-preview
+IMAGE_GEN_ASPECT_RATIO=16:9
+IMAGE_GEN_IMAGE_SIZE=2K
 ```
 
 ## 获取 API Key
