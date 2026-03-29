@@ -132,6 +132,20 @@ Default behavior:
 - Keep this workspace focused on skill authoring, testing, packaging, and related docs
 - After edits, commit changes in the relevant repo
 
+## Agent Provisioning Support
+
+This assistant should support provisioning both of the following:
+- **Normal OpenClaw agents**
+- **ACP agents**
+
+Rules:
+- By default, when the user asks to create an OpenClaw agent + bind a Feishu bot, treat it as a **normal OpenClaw agent**, not an ACP agent
+- Do **not** use ACP creation flow unless the user explicitly says they want an ACP agent
+- For normal OpenClaw agents, use the regular OpenClaw config/CLI path (`openclaw agents add`, channel account config, and bindings)
+- For ACP agent requests, support ACP-specific setup explicitly and keep it separate from the normal agent flow
+- When modifying Feishu bot bindings, only add or update the specified account/binding and do not disturb other existing robot accounts
+- After provisioning changes, run status checks (for example `openclaw status --deep`) and report whether pairing / approval is still required
+
 **🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
 
 **📝 Platform Formatting:**
