@@ -2,20 +2,92 @@
 """
 AI Image Generation Script
 Uses Gemini Flash Image Preview model via generateContent API.
+Falls back to curl for better compatibility with some upstream gateways.
 """
 import os
 import sys
+import json
 import base64
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Optional
-
-import httpx
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 API_KEY = os.environ.get("IMAGE_GEN_API_KEY", "")
 BASE_URL = os.environ.get("IMAGE_GEN_BASE_URL", "https://api.apiyi.com")
 DEFAULT_MODEL = os.environ.get("IMAGE_GEN_MODEL", "gemini-3.1-flash-image-preview")
 DEFAULT_ASPECT_RATIO = os.environ.get("IMAGE_GEN_ASPECT_RATIO", "16:9")
 DEFAULT_IMAGE_SIZE = os.environ.get("IMAGE_GEN_IMAGE_SIZE", "2K")
+
+
+def _call_api_with_curl(url: str, payload: dict) -> dict:
+    curl_bin = shutil.which("curl")
+    if not curl_bin:
+        raise RuntimeError("curl not found")
+
+    command = [
+        curl_bin,
+        "--silent",
+        "--show-error",
+        "--max-time",
+        "300",
+        url,
+        "-H",
+        f"Authorization: Bearer {API_KEY}",
+        "-H",
+        "Content-Type: application/json",
+        "--data",
+        json.dumps(payload, ensure_ascii=False),
+    ]
+
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "curl request failed")
+
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"invalid JSON response: {e}; body={result.stdout[:2000]}")
+
+
+def _call_api_with_urllib(url: str, payload: dict) -> dict:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urlopen(req, timeout=300) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else str(e)
+        raise RuntimeError(f"HTTP {e.code}: {body[:2000]}")
+    except URLError as e:
+        raise RuntimeError(f"network error: {e}")
+
+
+def call_api(url: str, payload: dict) -> dict:
+    errors = []
+
+    try:
+        return _call_api_with_curl(url, payload)
+    except Exception as e:
+        errors.append(f"curl failed: {e}")
+
+    try:
+        return _call_api_with_urllib(url, payload)
+    except Exception as e:
+        errors.append(f"urllib failed: {e}")
+
+    raise RuntimeError("; ".join(errors))
 
 
 def generate_image(
@@ -32,10 +104,6 @@ def generate_image(
         sys.exit(1)
 
     url = f"{BASE_URL}/v1beta/models/{model}:generateContent"
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-    }
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -52,14 +120,7 @@ def generate_image(
     print(f"Prompt: {prompt[:120]}...", file=sys.stderr)
 
     try:
-        with httpx.Client(timeout=300.0) as client:
-            response = client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            result = response.json()
-    except httpx.HTTPStatusError as e:
-        body = e.response.text[:2000] if e.response is not None else str(e)
-        print(f"ERROR: API returned {e.response.status_code}: {body}", file=sys.stderr)
-        sys.exit(1)
+        result = call_api(url, payload)
     except Exception as e:
         print(f"ERROR: API call failed: {e}", file=sys.stderr)
         sys.exit(1)
