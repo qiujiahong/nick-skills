@@ -12,6 +12,7 @@ skills/
   voice-director/
   openclaw-team-setup/
   openclaw-codex-account-switch/
+  agent-provisioning/
 dist/
 ```
 
@@ -27,6 +28,7 @@ dist/
 | [voice-director](skills/voice-director/) | 用 LLM 为台词自动标注情感、语速、语调，再交给 `voice-tts` 合成 |
 | [openclaw-team-setup](skills/openclaw-team-setup/) | 标准化配置或修复 OpenClaw 多智能体团队，覆盖 agent 拓扑、ACP、Feishu 路由与验证 |
 | [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/) | 在 OpenClaw 环境中切换或重配 OpenAI Codex 账号，并完成登录与连通性验收 |
+| [agent-provisioning](skills/agent-provisioning/) | 创建或修复单个 OpenClaw / ACP agent，并绑定指定的 Feishu 机器人与 routing binding |
 
 ## 安装方式
 
@@ -79,3 +81,4 @@ export NICK_SKILLS_ENV_DIRECTOR_MODEL="doubao-1.5-pro-256k"
 - 需要更有表现力的配音时，先用 [voice-director](skills/voice-director/) 标注，再用 [voice-tts](skills/voice-tts/) 合成。
 - 需要搭建或修复 OpenClaw 项目团队时，使用 [openclaw-team-setup](skills/openclaw-team-setup/)。
 - 需要切换 OpenClaw 上的 Codex OAuth 账号时，使用 [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/)。
+- 需要新建单个 agent、绑定 Feishu 机器人并校验状态时，使用 [agent-provisioning](skills/agent-provisioning/)。
