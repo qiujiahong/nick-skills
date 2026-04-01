@@ -36,7 +36,7 @@ FIN_AI_SMTP_FROM=your_mail@163.com
 FIN_AI_SMTP_USE_SSL=true
 
 # 默认订阅邮箱
-FIN_AI_SUBSCRIBERS=qiujiahaongde@163.com
+FIN_AI_SUBSCRIBERS=qiujiahongde@163.com
 ```
 
 ## 快速开始

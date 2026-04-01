@@ -48,7 +48,7 @@ metadata:
 默认建议把初始订阅邮箱放进去，例如：
 
 ```bash
-export FIN_AI_SUBSCRIBERS="qiujiahaongde@163.com"
+export FIN_AI_SUBSCRIBERS="qiujiahongde@163.com"
 ```
 
 ## 使用方式
