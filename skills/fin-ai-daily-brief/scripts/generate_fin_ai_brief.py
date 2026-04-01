@@ -8,28 +8,62 @@ import random
 import re
 import smtplib
 import ssl
+import subprocess
 import sys
-import time
-import urllib.error
-import urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+SKILL_DIR = SCRIPT_DIR.parent
+REPO_ROOT = SKILL_DIR.parent.parent
+TAVILY_SEARCH_SCRIPT = REPO_ROOT / "skills" / "tavily-search" / "scripts" / "tavily_search.py"
 
 DEFAULT_QUERY = "中文 金融 AI 应用 银行 券商 保险 资管 大模型 智能投研 风控 合规 AIAgent"
-DEFAULT_TOPIC = "news"
+DEFAULT_TOPIC = "general"
 DEFAULT_TOP_K = 20
 DEFAULT_KEEP = 10
-DEFAULT_BASE_URL = os.environ.get("TAVILY_SEARCH_BASE_URL", "https://api.tavily.com").rstrip("/")
-RETRYABLE_STATUS_CODES = {401, 403, 429}
+DEFAULT_COUNTRY = "china"
+DEFAULT_INCLUDE_DOMAINS = [
+    "36kr.com",
+    "wallstreetcn.com",
+    "cls.cn",
+    "stcn.com",
+    "yicai.com",
+    "jrj.com.cn",
+    "eastmoney.com",
+    "cs.com.cn",
+    "caixin.com",
+    "cnstock.com",
+    "finance.sina.com.cn",
+    "news.cn",
+]
+DEFAULT_EXCLUDE_DOMAINS = [
+    "marketbeat.com",
+    "insidermonkey.com",
+    "gurufocus.com",
+    "cbsnews.com",
+    "hospitalitynet.org",
+    "developingtelecoms.com",
+    "chainstoreage.com",
+]
 DEFAULT_QUERY_VARIANTS = [
     "中文 金融 AI 应用 银行 券商 保险 资管 大模型 智能投研 风控 合规",
     "中文 银行 AI 券商 AI 保险 AI 资管 AI 金融科技",
     "中文 证券 券商 投研 AI 智能投顾 金融大模型",
     "中文 保险 AI 风控 合规 智能客服 金融科技",
     "中文 金融监管 AI 银行业大模型 券商大模型 投研智能体",
+    "中文 银行 大模型 客服 风控 智能运营",
+    "中文 券商 AI 研究 投顾 合规 风控",
+    "中文 资管 基金 AI 投研 风险管理",
 ]
+MIN_SELECTED_ITEMS = 3
+MIN_SCORE_TO_KEEP = 18
+NOISY_HOSTS = {
+    "marketbeat.com", "insidermonkey.com", "gurufocus.com", "cbsnews.com", "hospitalitynet.org", "developingtelecoms.com", "chainstoreage.com"
+}
 
 HIGH_VALUE_TERMS = {
     "银行": 8,
@@ -82,6 +116,13 @@ LOW_VALUE_TERMS = {
     "入门": -3,
     "测评": -2,
     "榜单": -2,
+    "household": -8,
+    "at home": -8,
+    "home helper": -8,
+    "grocery": -6,
+    "travel": -5,
+    "pizza": -6,
+    "consumer": -3,
 }
 
 SOURCE_BONUS = {
@@ -129,118 +170,74 @@ FUN_FACTS = [
 ]
 
 
-def parse_keys() -> List[str]:
-    raw_multi = os.environ.get("TAVILY_API_KEYS", "")
-    raw_single = os.environ.get("TAVILY_API_KEY", "")
-    blob = "\n".join(part for part in [raw_multi, raw_single] if part)
-    if not blob.strip():
-        return []
-    normalized = blob.replace(",", "\n").replace(";", "\n").replace(" ", "\n")
-    keys = [item.strip() for item in normalized.splitlines() if item.strip()]
-    deduped = []
-    seen = set()
-    for key in keys:
-        if key not in seen:
-            seen.add(key)
-            deduped.append(key)
-    return deduped
+def load_env_file(path: Path) -> None:
+    if not path.exists() or not path.is_file():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
 
 
-def masked(key: str) -> str:
-    if len(key) <= 8:
-        return "*" * len(key)
-    return f"{key[:4]}...{key[-4:]}"
+def load_local_env() -> None:
+    for name in (".env.local", ".env"):
+        load_env_file(SKILL_DIR / name)
 
 
-def post_json(url: str, payload: dict, api_key: str) -> Tuple[int, dict]:
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
+load_local_env()
+
+
+def tavily_search(query: str, topic: str, max_results: int, country: str = "", include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None) -> dict:
+    if not TAVILY_SEARCH_SCRIPT.exists():
+        raise RuntimeError(f"tavily-search script not found: {TAVILY_SEARCH_SCRIPT}")
+
+    cmd = [
+        "python3",
+        str(TAVILY_SEARCH_SCRIPT),
+        query,
+        "--topic", topic,
+        "--max-results", str(max_results),
+        "--search-depth", "advanced",
+        "--include-answer",
+        "--include-domains", ",".join(include_domains or []),
+        "--exclude-domains", ",".join(exclude_domains or []),
+    ]
+    if topic == "news":
+        cmd += ["--days", "7"]
+
+    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(REPO_ROOT), env=os.environ.copy())
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+    if not stdout:
+        raise RuntimeError(f"tavily-search returned empty output: {stderr}")
+
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            status = getattr(resp, "status", 200)
-            data = json.loads(resp.read().decode("utf-8"))
-            return status, data
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else ""
-        try:
-            data = json.loads(raw) if raw else {"error": raw or str(e)}
-        except json.JSONDecodeError:
-            data = {"error": raw or str(e)}
-        return e.code, data
+        result = json.loads(stdout)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"failed to parse tavily-search output: {e}; stderr={stderr}; stdout={stdout[:500]}")
+
+    if country and topic == "general":
+        result["country"] = country
+    if include_domains:
+        result["include_domains"] = include_domains
+    if exclude_domains:
+        result["exclude_domains"] = exclude_domains
+    return result
 
 
-def tavily_search(query: str, topic: str, max_results: int) -> dict:
-    keys = parse_keys()
-    if not keys:
-        raise RuntimeError("missing TAVILY_API_KEYS or TAVILY_API_KEY")
-
-    random.shuffle(keys)
-    payload = {
-        "query": query,
-        "topic": topic,
-        "max_results": max_results,
-        "search_depth": "advanced",
-        "include_answer": True,
-        "include_raw_content": False,
-        "include_images": False,
-    }
-    url = f"{DEFAULT_BASE_URL}/search"
-    failures = []
-
-    for key in keys:
-        for attempt in range(1, 3):
-            try:
-                status, data = post_json(url, payload, key)
-            except Exception as e:
-                failures.append({
-                    "key": masked(key),
-                    "status": "exception",
-                    "attempt": attempt,
-                    "error": str(e),
-                })
-                if attempt < 2:
-                    time.sleep(1.2 * attempt)
-                    continue
-                status, data = None, None
-
-            if status is not None and 200 <= status < 300:
-                return {
-                    "ok": True,
-                    "used_key": masked(key),
-                    "query": query,
-                    "topic": topic,
-                    "response": data,
-                }
-
-            if status is not None:
-                failures.append({"key": masked(key), "status": status, "attempt": attempt, "error": data})
-                if status in RETRYABLE_STATUS_CODES and attempt < 2:
-                    time.sleep(1.2 * attempt)
-                    continue
-                if status not in RETRYABLE_STATUS_CODES:
-                    break
-                if attempt >= 2:
-                    break
-
-    return {"ok": False, "query": query, "topic": topic, "failures": failures}
-
-
-def multi_search(primary_query: str, topic: str, target_count: int) -> dict:
+def multi_search(primary_query: str, topic: str, target_count: int, country: str = "", include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None) -> dict:
     queries = [primary_query] + [q for q in DEFAULT_QUERY_VARIANTS if q != primary_query]
     all_results = []
     search_runs = []
 
     per_query = max(6, min(10, target_count))
     for query in queries:
-        result = tavily_search(query, topic, per_query)
+        result = tavily_search(query, topic, per_query, country=country, include_domains=include_domains, exclude_domains=exclude_domains)
         search_runs.append(result)
         if result.get("ok"):
             all_results.extend(result.get("response", {}).get("results", []))
@@ -253,6 +250,9 @@ def multi_search(primary_query: str, topic: str, target_count: int) -> dict:
         "ok": ok,
         "query": primary_query,
         "topic": topic,
+        "country": country,
+        "include_domains": include_domains or [],
+        "exclude_domains": exclude_domains or [],
         "search_runs": search_runs,
         "response": {
             "results": merged,
@@ -354,33 +354,39 @@ def is_relevant_fin_ai_item(item: dict) -> bool:
         "银行", "券商", "证券", "保险", "资管", "基金", "金融", "fintech", "financial", "bank", "banking", "asset management", "wealth", "broker", "trading", "investment", "payments", "payment", "lending", "underwriting", "claims", "fraud"
     ]
     ai_terms = [
-        "ai", "agent", "llm", "大模型", "人工智能", "模型", "机器学习", "automation", "copilot", "生成式", "genai"
+        "ai", "agent", "智能体", "llm", "大模型", "人工智能", "模型", "机器学习", "automation", "copilot", "生成式", "genai"
     ]
     noise_terms = [
-        "sports", "retail associate", "shopping assistant", "apartment portfolio", "telecom", "hospitality", "movie", "game", "fashion"
+        "sports", "retail associate", "shopping assistant", "apartment portfolio", "movie", "game", "fashion", "at home", "home helper", "order pizza", "travel booking"
     ]
-    noisy_hosts = {
-        "marketbeat.com", "insidermonkey.com", "gurufocus.com", "cbsnews.com", "hospitalitynet.org", "developingtelecoms.com", "chainstoreage.com"
-    }
-
+    business_terms = [
+        "underwriting", "claims", "fraud", "risk", "compliance", "governance", "loan", "lending", "wealth", "portfolio", "payments", "customer service", "投研", "风控", "合规", "承保", "理赔", "贷款", "支付", "财富管理", "投顾", "客服"
+    ]
     finance_hits = sum(1 for term in finance_terms if term.lower() in text)
     ai_hits = sum(1 for term in ai_terms if term.lower() in text)
     noise_hits = sum(1 for term in noise_terms if term in text)
+    business_hits = sum(1 for term in business_terms if term.lower() in text)
     has_cn = contains_chinese(title) or contains_chinese(content)
+    high_signal = business_hits >= 2
+    score = score_item(item)
 
-    if host in noisy_hosts:
+    if host in NOISY_HOSTS:
         return False
     if noise_hits > 0:
         return False
-    if len(title) < 12:
+    if len(title) < 8:
         return False
     if finance_hits < 1 or ai_hits < 1:
         return False
-    if len(content) < 80 and len(title) < 24:
+    if business_hits < 1 and score < MIN_SCORE_TO_KEEP + 10:
         return False
-    if not has_cn:
+    if len(content) < 30 and len(title) < 18:
         return False
-    return True
+    if score < MIN_SCORE_TO_KEEP:
+        return False
+    if has_cn:
+        return high_signal or score >= MIN_SCORE_TO_KEEP + 4
+    return high_signal or score >= MIN_SCORE_TO_KEEP + 12
 
 
 def select_top_items(items: List[dict], keep: int) -> List[dict]:
@@ -404,11 +410,13 @@ def build_overview(selected: List[dict], date_str: str, query: str) -> str:
     focus_terms = []
     for item in selected:
         text = (item["title"] + " " + item["summary"]).lower()
-        for term in ["银行", "券商", "保险", "资管", "风控", "合规", "投研", "agent", "大模型", "监管"]:
+        for term in ["银行", "券商", "保险", "资管", "风控", "合规", "投研", "agent", "智能体", "大模型", "监管"]:
             if term.lower() in text and term not in focus_terms:
                 focus_terms.append(term)
     top_focus = "、".join(focus_terms[:5]) if focus_terms else "金融机构 AI 落地"
-    return f"{date_str} 的金融 AI 简报共筛出 {len(selected)} 条高价值资讯，重点集中在 {top_focus} 等方向。整体看，真正值得金融机构关注的，不是泛 AI 热点，而是能映射到业务流程、监管要求和分析效率提升的实际应用。搜索主题为：{query}。"
+    if not selected:
+        return f"{date_str} 的金融 AI 简报今天没有发现足够值得纳入的高信号资讯。当前更值得持续跟踪的方向，仍然是 {top_focus}、监管要求映射，以及分析与运营效率提升相关的实际应用。搜索主题为：{query}。"
+    return f"{date_str} 的金融 AI 简报聚焦 {top_focus} 等方向。整体看，真正值得金融机构关注的，不是泛 AI 热点，而是能映射到业务流程、监管要求和分析效率提升的实际应用。搜索主题为：{query}。"
 
 
 def choose_fun_facts() -> List[str]:
@@ -566,9 +574,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Generate and optionally email a financial AI daily brief")
     parser.add_argument("--query", default=DEFAULT_QUERY)
     parser.add_argument("--date", default=dt.date.today().isoformat())
-    parser.add_argument("--topic", default=DEFAULT_TOPIC, choices=["general", "news"])
+    parser.add_argument("--topic", default=DEFAULT_TOPIC, choices=["general", "news", "finance"])
     parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument("--keep", type=int, default=DEFAULT_KEEP)
+    parser.add_argument("--country", default=DEFAULT_COUNTRY)
+    parser.add_argument("--include-domain", action="append", default=[])
+    parser.add_argument("--exclude-domain", action="append", default=[])
     parser.add_argument("--output-dir", default="./output")
     parser.add_argument("--recipient", action="append", default=[])
     parser.add_argument("--send-email", action="store_true")
@@ -578,7 +589,9 @@ def main() -> int:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    search_result = multi_search(args.query, args.topic, args.top_k)
+    include_domains = args.include_domain or DEFAULT_INCLUDE_DOMAINS
+    exclude_domains = args.exclude_domain or DEFAULT_EXCLUDE_DOMAINS
+    search_result = multi_search(args.query, args.topic, args.top_k, country=args.country, include_domains=include_domains, exclude_domains=exclude_domains)
     (out_dir / "search-result.json").write_text(json.dumps(search_result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     if not search_result.get("ok"):
@@ -588,6 +601,22 @@ def main() -> int:
     raw_items = search_result.get("response", {}).get("results", [])
     deduped = dedupe_items(raw_items)
     filtered = [item for item in deduped if is_relevant_fin_ai_item(item)]
+    if len(filtered) < MIN_SELECTED_ITEMS:
+        fallback_candidates = []
+        for item in deduped:
+            score = score_item(item)
+            text = normalize_text(item.get("title") or "") + " " + normalize_text(item.get("content") or item.get("raw_content") or "")
+            lower_text = text.lower()
+            has_cn = contains_chinese(text)
+            host = hostname_from_url(item.get("url") or "")
+            finance_hint = any(term in lower_text for term in ["银行", "券商", "证券", "保险", "资管", "基金", "金融", "fintech", "financial", "bank", "broker", "investment", "lending", "payments"])
+            ai_hint = any(term in lower_text for term in ["ai", "agent", "智能体", "llm", "大模型", "人工智能", "模型", "生成式", "copilot", "genai"])
+            business_hits = sum(1 for term in ["underwriting", "claims", "fraud", "risk", "compliance", "governance", "loan", "lending", "wealth", "portfolio", "payments", "customer service", "投研", "风控", "合规", "承保", "理赔", "贷款", "支付", "财富管理", "投顾", "客服"] if term in lower_text)
+            consumer_noise = any(term in lower_text for term in ["at home", "home helper", "order pizza", "travel booking", "grocery"])
+            if score >= MIN_SCORE_TO_KEEP and host not in NOISY_HOSTS and finance_hint and ai_hint and not consumer_noise and (business_hits >= 2 or score >= MIN_SCORE_TO_KEEP + 12 or (has_cn and business_hits >= 1)):
+                fallback_candidates.append(item)
+        fallback_candidates = dedupe_items(fallback_candidates)
+        filtered = fallback_candidates
     selected = select_top_items(filtered, args.keep)
 
     candidates_view = []
