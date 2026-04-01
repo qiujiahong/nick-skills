@@ -17,17 +17,18 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-DEFAULT_QUERY = "金融 AI 应用 银行 券商 保险 资管 大模型 智能投研 风控 合规 AIAgent"
+DEFAULT_QUERY = "中文 金融 AI 应用 银行 券商 保险 资管 大模型 智能投研 风控 合规 AIAgent"
 DEFAULT_TOPIC = "news"
 DEFAULT_TOP_K = 20
 DEFAULT_KEEP = 10
 DEFAULT_BASE_URL = os.environ.get("TAVILY_SEARCH_BASE_URL", "https://api.tavily.com").rstrip("/")
 RETRYABLE_STATUS_CODES = {401, 403, 429}
 DEFAULT_QUERY_VARIANTS = [
-    "金融 AI 应用 银行 券商 保险 资管 大模型 智能投研 风控 合规",
-    "banking AI wealth management AI risk compliance AI financial services AI",
-    "证券 券商 投研 AI 智能投顾 金融大模型",
-    "保险 AI 风控 合规 智能客服 金融科技",
+    "中文 金融 AI 应用 银行 券商 保险 资管 大模型 智能投研 风控 合规",
+    "中文 银行 AI 券商 AI 保险 AI 资管 AI 金融科技",
+    "中文 证券 券商 投研 AI 智能投顾 金融大模型",
+    "中文 保险 AI 风控 合规 智能客服 金融科技",
+    "中文 金融监管 AI 银行业大模型 券商大模型 投研智能体",
 ]
 
 HIGH_VALUE_TERMS = {
@@ -102,6 +103,20 @@ SOURCE_BONUS = {
     "theverge.com": 2,
     "hbr.org": 3,
     "www.scmp.com": 2,
+    "36kr.com": 6,
+    "cls.cn": 7,
+    "wallstreetcn.com": 6,
+    "stcn.com": 6,
+    "yicai.com": 6,
+    "caixin.com": 7,
+    "jrj.com.cn": 5,
+    "eastmoney.com": 5,
+    "21jingji.com": 6,
+    "cs.com.cn": 6,
+    "cnstock.com": 6,
+    "sina.com.cn": 4,
+    "sohu.com": 3,
+    "163.com": 3,
 }
 
 FUN_FACTS = [
@@ -264,6 +279,10 @@ def summarize_item(item: dict) -> str:
     return content
 
 
+def contains_chinese(text: str) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+
+
 def score_item(item: dict) -> int:
     title_text = normalize_text(item.get("title") or "").lower()
     content_text = normalize_text(item.get("content") or item.get("raw_content") or "").lower()
@@ -302,6 +321,8 @@ def score_item(item: dict) -> int:
         score += 10
 
     title = normalize_text(item.get("title") or "")
+    if contains_chinese(title) or contains_chinese(content_text):
+        score += 12
     if len(title) >= 18:
         score += 1
     if item.get("published_date"):
@@ -345,6 +366,7 @@ def is_relevant_fin_ai_item(item: dict) -> bool:
     finance_hits = sum(1 for term in finance_terms if term.lower() in text)
     ai_hits = sum(1 for term in ai_terms if term.lower() in text)
     noise_hits = sum(1 for term in noise_terms if term in text)
+    has_cn = contains_chinese(title) or contains_chinese(content)
 
     if host in noisy_hosts:
         return False
@@ -355,6 +377,8 @@ def is_relevant_fin_ai_item(item: dict) -> bool:
     if finance_hits < 1 or ai_hits < 1:
         return False
     if len(content) < 80 and len(title) < 24:
+        return False
+    if not has_cn:
         return False
     return True
 
