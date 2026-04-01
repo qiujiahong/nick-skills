@@ -13,6 +13,7 @@ skills/
   openclaw-team-setup/
   openclaw-codex-account-switch/
   agent-provisioning/
+  fin-ai-daily-brief/
 dist/
 ```
 
@@ -29,6 +30,7 @@ dist/
 | [openclaw-team-setup](skills/openclaw-team-setup/) | 标准化配置或修复 OpenClaw 多智能体团队，覆盖 agent 拓扑、ACP、Feishu 路由与验证 |
 | [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/) | 在 OpenClaw 环境中切换或重配 OpenAI Codex 账号，并完成登录与连通性验收 |
 | [agent-provisioning](skills/agent-provisioning/) | 创建或修复单个 OpenClaw / ACP agent，并绑定指定的 Feishu 机器人与 routing binding |
+| [fin-ai-daily-brief](skills/fin-ai-daily-brief/) | 搜索 20 条金融 + AI 资讯，筛选出最有价值的 10 条，生成 HTML 资讯页并通过 SMTP 邮件发送 |
 
 ## 安装方式
 
@@ -85,3 +87,4 @@ export NICK_SKILLS_ENV_DIRECTOR_MODEL="doubao-1.5-pro-256k"
 - 需要搭建或修复 OpenClaw 项目团队时，使用 [openclaw-team-setup](skills/openclaw-team-setup/)。
 - 需要切换 OpenClaw 上的 Codex OAuth 账号时，使用 [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/)。
 - 需要新建单个 agent、绑定 Feishu 机器人并校验状态时，使用 [agent-provisioning](skills/agent-provisioning/)。
+- 需要生成金融 AI 日报、邮件订阅资讯页时，使用 [fin-ai-daily-brief](skills/fin-ai-daily-brief/)。
