@@ -10,6 +10,7 @@ skills/
   video-gen/
   voice-tts/
   voice-director/
+  ai-topic-research/
   openclaw-team-setup/
   openclaw-codex-account-switch/
   agent-provisioning/
@@ -27,6 +28,7 @@ dist/
 | [video-gen](skills/video-gen/) | AI 视频生成与编辑，基于火山引擎 Doubao Seedance，支持文生视频、图生视频、有声视频 |
 | [voice-tts](skills/voice-tts/) | 火山引擎语音合成，支持声音复刻音色、语速 / 语调 / 情感控制 |
 | [voice-director](skills/voice-director/) | 用 LLM 为台词自动标注情感、语速、语调，再交给 `voice-tts` 合成 |
+| [ai-topic-research](skills/ai-topic-research/) | 面向 AI 技术主题的联网研究，输入一个粗主题词，自动搜官方资料、最新进展、教程、开源项目和对比观点，并整理成结构化摘要 |
 | [openclaw-team-setup](skills/openclaw-team-setup/) | 标准化配置或修复 OpenClaw 多智能体团队，覆盖 agent 拓扑、ACP、Feishu 路由与验证 |
 | [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/) | 在 OpenClaw 环境中切换或重配 OpenAI Codex 账号，并完成登录与连通性验收 |
 | [agent-provisioning](skills/agent-provisioning/) | 创建或修复单个 OpenClaw / ACP agent，并绑定指定的 Feishu 机器人与 routing binding |
@@ -79,11 +81,19 @@ export NICK_SKILLS_ENV_DIRECTOR_BASE_URL="https://ark.cn-beijing.volces.com/api/
 export NICK_SKILLS_ENV_DIRECTOR_MODEL="doubao-1.5-pro-256k"
 ```
 
+### ai-topic-research
+
+```bash
+export TAVILY_API_KEYS="tvly-key-1,tvly-key-2"
+export TAVILY_SEARCH_BASE_URL="https://api.tavily.com"
+```
+
 ## 使用建议
 
 - 图像生成直接看 [image-gen](skills/image-gen/)。
 - 视频生成直接看 [video-gen](skills/video-gen/)。
 - 需要更有表现力的配音时，先用 [voice-director](skills/voice-director/) 标注，再用 [voice-tts](skills/voice-tts/) 合成。
+- 需要围绕 `MCP`、`RAG`、`AI Coding Agent`、`Responses API` 这类主题快速做第一轮资料研究时，使用 [ai-topic-research](skills/ai-topic-research/)。
 - 需要搭建或修复 OpenClaw 项目团队时，使用 [openclaw-team-setup](skills/openclaw-team-setup/)。
 - 需要切换 OpenClaw 上的 Codex OAuth 账号时，使用 [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/)。
 - 需要新建单个 agent、绑定 Feishu 机器人并校验状态时，使用 [agent-provisioning](skills/agent-provisioning/)。
