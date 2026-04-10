@@ -4,130 +4,77 @@
 
 OpenClaw 最流行的 5 个 skill 的使用方法
 
-## 读者场景
-
-- 刚开始用 OpenClaw 的用户
-- 想给 OpenClaw 补第一批高频 skill 的用户
-- 想知道哪些 skill 真正常用，而不是只看本地示例仓库的用户
-
 ## 排序依据
 
-这篇文章里的“最流行”不是根据本地仓库里有哪些 skill 排出来的，而是按 2026-04-11 能查到的外部证据做交叉筛选：
+这篇文章里的“最流行”不按本地仓库内容排序，而按 2026-04-11 可查到的外部资料交叉判断：
 
-1. ClawHub / OpenClaw Hub 可见的下载量和星标热度
-2. 官方文档里常见的安装方式与 OpenClaw 技能生态说明
-3. 社区文章里“优先安装”的重合项
-4. 安全因素和通用性过滤
+1. ClawHub / OpenClaw Hub 的下载量、星标和热门列表
+2. 社区文章对“第一批值得安装”的推荐重合度
+3. OpenClaw 官方文档里的技能安装路径
+4. 安全性与通用性过滤
 
-补充说明：
+本次最终选择：
 
-- `capability-evolver`、`wacli`、`byterover` 这类 skill 在某些榜单里下载量也很高，但社区安全讨论和通用性不如本次入选项稳定
-- 本文优先选“新手装上之后马上能用、跨场景复用频率高”的 skill
-- 因为 OpenClaw 生态里有同名或近似名称的 skill，正文安装步骤会优先建议先 `search` 再 `install`
+1. Gog
+2. self-improving-agent
+3. Summarize
+4. Github
+5. Weather
 
-## 入选的 5 个 skill
+## 外部证据
 
-### 1. self-improving-agent
+OpenClaw Hub 首页展示了热门 skill 和下载/星标数据，并说明数据来自 clawhub.ai API。其热门列表中可见 `self-improving-agent`、`Gog`、`Summarize`、`Github` 等高频项。
 
-- 外部证据：
-  - OpenClaw Hub 首页把它列进热门 skill，显示约 `15,962` 下载、`132` 星
-  - 社区文章《35 OpenClaw Skills That Are Actually Worth Installing》把它列进“five to install first”
-- 入选理由：
-  - 高频、通用、差异化强
-  - 和普通工具 skill 不同，它直接改变 OpenClaw 的长期工作方式
-- 可写角度：
-  - 它不是“再加一个工具”，而是给 OpenClaw 加一层长期记忆和纠错闭环
-  - 越是重复性工作，收益越明显
+Rentamac 在 2026-02-24 发布的社区筛选文章把 `Gog`、`self-improving-agent`、`Summarize`、`Github`、`Weather` 列为 “The five to install first”，并给出下载量、使用理由和安全提醒。
 
-### 2. Gog
+OpenClaw 官方 CLI 文档说明可以通过 `openclaw skills search`、`openclaw skills install` 和 `openclaw skills update` 安装/管理技能。
 
-- 外部证据：
-  - OpenClaw Hub 首页热门 skill，显示约 `14,313` 下载、`48` 星
-  - 社区文章把它列为第一批优先安装 skill，并强调 Gmail、Calendar、Drive、Docs、Sheets 的联动能力
-- 入选理由：
-  - 高度贴近日常办公
-  - 一装就能覆盖邮件、日程、文档、表格多个高频场景
-- 可写角度：
-  - 它的价值不是单点查 Gmail，而是跨 Google Workspace 服务串动作
+## 安全提醒
 
-### 3. Summarize
+ClawHub 生态曾经出现过恶意 skill 事件，所以文章里必须提醒读者不要只按名字盲装。推荐使用顺序是：
 
-- 外部证据：
-  - OpenClaw Hub 首页热门 skill，显示约 `10,956` 下载、`28` 星
-  - 社区文章给出的下载量约 `26.1K`，并把它列进“five to install first”
-- 入选理由：
-  - 上手门槛低，立刻能感受到效率提升
-  - 几乎适用于文章、PDF、视频、长文档、会议记录等所有“先浓缩再处理”的场景
-- 可写角度：
-  - 它是最像“今天装上今天就能开始省时间”的 skill
+先 search，核对名称、作者、版本和说明，再 install。对不熟悉的 skill，先在隔离环境或临时机器上测试。
 
-### 4. Github
+## 每个 skill 的写作重点
 
-- 外部证据：
-  - OpenClaw Hub 首页热门 skill，显示约 `10,611` 下载、`15` 星
-  - 社区文章给出的下载量约 `24.8K`
-  - 开发者文章里经常把 Github 列进第一批开发向 skill
-- 入选理由：
-  - 对开发者群体极其高频
-  - 价值不在“连上 GitHub”，而在把 PR、Issue、CI 和日常问答接到 agent 工作流里
-- 可写角度：
-  - 从“看 GitHub”升级成“让 OpenClaw 帮你处理 GitHub”
+### Gog
 
-### 5. Weather
+适合写成“办公动作联动器”。它的亮点不是读 Gmail，而是把 Gmail、Calendar、Drive、Docs、Sheets、Contacts 放进同一条任务链里。
 
-- 外部证据：
-  - 社区文章给出的下载量约 `21.1K`
-  - 官方 popular 技能列表里长期能见到 Weather 类 skill
-- 入选理由：
-  - 功能简单，但组合价值高
-  - 和日程、邮件、早报类工作流组合时非常顺手
-- 可写角度：
-  - 单独看很普通，放进 morning brief 流程里就变成高频基础能力
+可用例子：让 OpenClaw 查今天会议，找相关邮件，定位 Drive 文件，并生成跟进摘要。
 
-## 关键事实
+### self-improving-agent
 
-- OpenClaw 官方文档说明可以通过 `openclaw skills search` 和 `openclaw skills install` 安装 ClawHub skill
-- OpenClaw Hub 说明其数据来自 clawhub.ai API，可作为下载量与热度的辅助观测来源
-- 社区“优先安装”类文章通常不会单纯按下载量排序，而会额外考虑安全性、稳定性和上手收益
+适合写成“让 OpenClaw 记住你的工作习惯”。它的亮点是把用户反复纠正过的偏好沉淀成长期工作流。
 
-## 关键观点
+可用例子：周报格式、会议纪要字段、博客写作口吻、代码 review 关注点。
 
-- “最流行”不等于“单纯下载最高”，更适合写成“最常被装到第一批工作流里的 5 个”
-- 真正适合博客传播的切法不是逐条翻译 skill 描述，而是回答：
-  - 为什么这 5 个最先被装
-  - 它们分别解决什么日常动作
-  - 新手应该先装哪一个
-- 这篇文章需要明确提醒读者注意 ClawHub 生态的安全问题，建议安装前先搜索、核对作者和版本记录
+### Summarize
 
-## 可用案例
+适合写成“输入压缩层”。它最容易让新用户感受到收益，因为文章、PDF、视频、会议内容都可以先浓缩再处理。
 
-- self-improving-agent：
-  - 重复写周报、日报、会议总结时，让 OpenClaw 记住你的格式偏好
-- Gog：
-  - “帮我看今天下午的会议，把相关邮件和 Drive 文档一起整理出来”
-- Summarize：
-  - “把这篇长文、这个 PDF、这个 YouTube 视频先压成 5 点摘要”
-- Github：
-  - “看一下昨晚失败的 CI，帮我归因成 3 类问题”
-- Weather：
-  - “给我一个早间简报：天气、日程、紧急邮件”
+可用例子：把一篇技术长文压成 5 条结论，并标出值得继续深挖的部分。
 
-## 文章主线建议
+### Github
 
-文章不要写成“排行榜播报”，而是写成：
+适合写成“开发工作台”。它让 OpenClaw 不只是能看 GitHub，而是可以整理 PR、Issue、CI 和 review 反馈。
 
-1. 先说明为什么要重新认真挑第一批 skill
-2. 再交代这 5 个是怎么选出来的
-3. 再逐个讲“它解决什么问题 + 最好怎么用”
-4. 最后给出一条装机顺序建议
+可用例子：早上让 OpenClaw 汇总昨晚失败的 CI，并按原因归类。
 
-## 可用支撑链接
+### Weather
 
-- 官方 CLI 安装说明：
-  - https://docs.openclaw.ai/de/cli/index
-- OpenClaw Hub 热门技能页：
-  - https://openclaw-hub.org/
-- 社区交叉筛选文章：
-  - https://rentamac.io/best-openclaw-skills/
-- 使用示例目录：
-  - https://openclaw.army/
+适合写成“组合工作流的环境信息”。单独看普通，但和日程、邮件、早报组合后会变成高频入口。
+
+可用例子：早间简报里合并天气、日程和紧急邮件。
+
+## 文章结构建议
+
+开头先回答“为什么不该乱装 skill”。中段交代排序依据，再逐个讲 5 个 skill 的使用方法。结尾给出安装顺序和安全建议。
+
+文章不要在中间直接大段引用外部文章，而是把外部资料转成自己的判断。外部链接放在文末延伸阅读。
+
+## 支撑链接
+
+- OpenClaw Hub 热门技能数据：https://openclaw-hub.org/
+- 社区筛选文章：https://rentamac.io/best-openclaw-skills/
+- OpenClaw CLI 文档：https://docs.openclaw.ai/de/cli/index
