@@ -269,6 +269,14 @@ class ClusterSummary:
     hits: List[SearchHit]
 
 
+@dataclass
+class BlogTopicRecommendation:
+    topic: ClusterSummary
+    angle: Optional[ClusterSummary]
+    used_topics: List[str]
+    fallback_used_topic: bool
+
+
 def load_env_file(path: Path) -> None:
     if not path.exists() or not path.is_file():
         return
@@ -312,6 +320,13 @@ def split_csv(value: str) -> List[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
+def split_topic_list(value: str) -> List[str]:
+    if not value:
+        return []
+    normalized = value.replace("\n", ",").replace(";", ",").replace("|", ",")
+    return [part.strip() for part in normalized.split(",") if part.strip()]
+
+
 def hostname_from_url(url: str) -> str:
     match = re.match(r"https?://([^/]+)", url or "")
     if not match:
@@ -346,6 +361,11 @@ def canonicalize_url(url: str) -> str:
 
 def normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", (value or "").strip())
+
+
+def normalize_slug(value: str) -> str:
+    lowered = normalize_text(value).lower()
+    return re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", lowered)
 
 
 def trim_text(value: str, limit: int = 180) -> str:
@@ -521,14 +541,14 @@ def collect_hits(
             for item in result.get("response", {}).get("results", []):
                 title = normalize_text(item.get("title") or "")
                 url = normalize_text(item.get("url") or "")
-            content = trim_text(item.get("content") or item.get("raw_content") or "")
-            domain = hostname_from_url(url)
-            if not title or not url:
-                continue
-            if include_domains and not domain_matches(domain, include_domains):
-                continue
-            score = score_hit(search_topic, query, section, title, content, domain, url, intent_terms)
-            hits.append(
+                content = trim_text(item.get("content") or item.get("raw_content") or "")
+                domain = hostname_from_url(url)
+                if not title or not url:
+                    continue
+                if include_domains and not domain_matches(domain, include_domains):
+                    continue
+                score = score_hit(search_topic, query, section, title, content, domain, url, intent_terms)
+                hits.append(
                     SearchHit(
                         section=section,
                         query=query,
@@ -726,6 +746,66 @@ def build_discovery_takeaways(
     return takeaways[:4]
 
 
+def summary_matches_used_topics(summary: ClusterSummary, used_topics: Sequence[str]) -> bool:
+    if not used_topics:
+        return False
+
+    summary_forms = {
+        normalize_slug(summary.slug),
+        normalize_slug(summary.label),
+    }
+    for tag in summary.tags:
+        summary_forms.add(normalize_slug(tag))
+
+    for used in used_topics:
+        used_form = normalize_slug(used)
+        if not used_form:
+            continue
+        if used_form in summary_forms:
+            return True
+        if any(used_form in form or form in used_form for form in summary_forms if form):
+            return True
+    return False
+
+
+def pick_blog_topic_recommendation(
+    trend_summaries: Sequence[ClusterSummary],
+    viewpoint_summaries: Sequence[ClusterSummary],
+    used_topics: Sequence[str],
+) -> Optional[BlogTopicRecommendation]:
+    if not trend_summaries:
+        return None
+
+    chosen_topic = None
+    fallback_used_topic = False
+    for summary in trend_summaries:
+        if summary_matches_used_topics(summary, used_topics):
+            continue
+        chosen_topic = summary
+        break
+
+    if chosen_topic is None:
+        chosen_topic = trend_summaries[0]
+        fallback_used_topic = True
+
+    related_angle = None
+    topic_tag_forms = {normalize_slug(tag) for tag in chosen_topic.tags}
+    for summary in viewpoint_summaries:
+        if summary_matches_used_topics(summary, used_topics):
+            continue
+        angle_tag_forms = {normalize_slug(tag) for tag in summary.tags}
+        if topic_tag_forms & angle_tag_forms:
+            related_angle = summary
+            break
+
+    return BlogTopicRecommendation(
+        topic=chosen_topic,
+        angle=related_angle,
+        used_topics=list(used_topics),
+        fallback_used_topic=fallback_used_topic,
+    )
+
+
 def render_markdown(
     topic: str,
     profile_name: str,
@@ -767,59 +847,49 @@ def render_markdown(
 def render_discovery_markdown(
     seed_topic: str,
     days: int,
-    trend_summaries: Sequence[ClusterSummary],
-    viewpoint_summaries: Sequence[ClusterSummary],
-    takeaways: Sequence[str],
+    recommendation: BlogTopicRecommendation,
 ) -> str:
-    title = f"{seed_topic} 社区热点" if seed_topic else "AI 技术社区热点"
+    title = f"{seed_topic} 博客选题推荐" if seed_topic else "AI 博客选题推荐"
+    topic = recommendation.topic
+    angle = recommendation.angle
     lines = [
         f"# {title}",
         "",
         f"- 时间窗口：最近 {days} 天",
-        f"- 社区源：{', '.join(COMMUNITY_SOURCE_DOMAINS[:6])} 等",
+        f"- 推荐主题：{topic.label}",
         "",
-        "## 快速判断",
+        "## 选题",
         "",
     ]
-    for item in takeaways:
-        lines.append(f"- {item}")
+    lines.append(f"- 主题：`{topic.label}`")
+    lines.append(f"- 关键词：`{', '.join(topic.tags)}`")
+    lines.append(f"- 热度信号：{topic.score}")
+    if recommendation.used_topics:
+        lines.append(f"- 已避开近 10 天主题：`{', '.join(recommendation.used_topics)}`")
+    if recommendation.fallback_used_topic:
+        lines.append("- 备注：候选都与已用主题重叠，这次退回到了热度最高的主题。")
     lines.append("")
-    lines.append("## 热门技术方向")
-    lines.append("")
-    for index, summary in enumerate(trend_summaries[:5], start=1):
-        lines.append(f"### {index}. {summary.label}")
+    if angle:
+        lines.append("## 推荐切口")
         lines.append("")
-        lines.append(f"- 关键词：`{', '.join(summary.tags)}`")
-        lines.append(f"- 信号强度：{summary.score}")
-        for hit in summary.hits:
-            lines.append(f"- [{hit.title}]({hit.url})")
-            lines.append(f"  来源：`{hit.domain}`")
-            if hit.content:
-                lines.append(f"  摘要：{hit.content}")
+        lines.append(f"- {angle.label}")
         lines.append("")
 
-    if viewpoint_summaries:
-        lines.append("## 热门观点 / 争议")
-        lines.append("")
-        for summary in viewpoint_summaries[:5]:
-            lines.append(f"### {summary.label}")
-            lines.append("")
-            for hit in summary.hits:
+    lines.append("## 支撑链接")
+    lines.append("")
+    for hit in topic.hits:
+        lines.append(f"- [{hit.title}]({hit.url})")
+        lines.append(f"  来源：`{hit.domain}`")
+        if hit.content:
+            lines.append(f"  摘要：{hit.content}")
+    if angle:
+        for hit in angle.hits[:1]:
+            if all(hit.url != existing.url for existing in topic.hits):
                 lines.append(f"- [{hit.title}]({hit.url})")
                 lines.append(f"  来源：`{hit.domain}`")
                 if hit.content:
                     lines.append(f"  摘要：{hit.content}")
-            lines.append("")
-
-    if trend_summaries:
-        lines.append("## 值得继续追的关键词")
-        lines.append("")
-        tags = []
-        for summary in trend_summaries[:4]:
-            tags.extend(summary.tags)
-        for tag in sorted(dict.fromkeys(tags)):
-            lines.append(f"- `{tag}`")
-        lines.append("")
+    lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
 
@@ -857,57 +927,51 @@ def to_json_payload(
 def discovery_json_payload(
     seed_topic: str,
     days: int,
-    trend_summaries: Sequence[ClusterSummary],
-    viewpoint_summaries: Sequence[ClusterSummary],
-    takeaways: Sequence[str],
+    recommendation: BlogTopicRecommendation,
     search_runs: Sequence[dict],
 ) -> dict:
+    angle = recommendation.angle
     return {
         "mode": "discover",
         "seed_topic": seed_topic,
         "days": days,
         "community_sources": list(COMMUNITY_SOURCE_DOMAINS),
-        "takeaways": list(takeaways),
-        "trends": [
-            {
-                "slug": summary.slug,
-                "label": summary.label,
-                "tags": summary.tags,
-                "score": summary.score,
-                "hits": [
-                    {
-                        "title": hit.title,
-                        "url": hit.url,
-                        "domain": hit.domain,
-                        "summary": hit.content,
-                        "query": hit.query,
-                        "score": hit.score,
-                    }
-                    for hit in summary.hits
-                ],
-            }
-            for summary in trend_summaries
-        ],
-        "viewpoints": [
-            {
-                "slug": summary.slug,
-                "label": summary.label,
-                "tags": summary.tags,
-                "score": summary.score,
-                "hits": [
-                    {
-                        "title": hit.title,
-                        "url": hit.url,
-                        "domain": hit.domain,
-                        "summary": hit.content,
-                        "query": hit.query,
-                        "score": hit.score,
-                    }
-                    for hit in summary.hits
-                ],
-            }
-            for summary in viewpoint_summaries
-        ],
+        "used_topics": recommendation.used_topics,
+        "fallback_used_topic": recommendation.fallback_used_topic,
+        "recommended_topic": {
+            "slug": recommendation.topic.slug,
+            "label": recommendation.topic.label,
+            "tags": recommendation.topic.tags,
+            "score": recommendation.topic.score,
+            "hits": [
+                {
+                    "title": hit.title,
+                    "url": hit.url,
+                    "domain": hit.domain,
+                    "summary": hit.content,
+                    "query": hit.query,
+                    "score": hit.score,
+                }
+                for hit in recommendation.topic.hits
+            ],
+        },
+        "recommended_angle": None if angle is None else {
+            "slug": angle.slug,
+            "label": angle.label,
+            "tags": angle.tags,
+            "score": angle.score,
+            "hits": [
+                {
+                    "title": hit.title,
+                    "url": hit.url,
+                    "domain": hit.domain,
+                    "summary": hit.content,
+                    "query": hit.query,
+                    "score": hit.score,
+                }
+                for hit in angle.hits
+            ],
+        },
         "search_runs": list(search_runs),
     }
 
@@ -921,6 +985,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-per-section", type=int, default=DEFAULT_MAX_PER_SECTION)
     parser.add_argument("--queries-per-section", type=int, default=DEFAULT_QUERIES_PER_SECTION)
     parser.add_argument("--discover-queries", type=int, default=DEFAULT_DISCOVER_QUERIES)
+    parser.add_argument("--used-topics", default="", help="Recently used blog topics to avoid, separated by commas/newlines")
     parser.add_argument("--search-depth", choices=["basic", "advanced"], default=DEFAULT_SEARCH_DEPTH)
     parser.add_argument("--days", type=int, default=DEFAULT_DAYS, help="Days window for the latest/news section")
     parser.add_argument("--include-domains", default="", help="Extra domains to include, comma-separated")
@@ -936,6 +1001,7 @@ def main() -> int:
     mode = args.mode or ("discover" if not args.topic else "topic")
     include_domains = split_csv(args.include_domains)
     exclude_domains = DEFAULT_EXCLUDE_DOMAINS + split_csv(args.exclude_domains)
+    used_topics = split_topic_list(args.used_topics)
     if mode == "discover":
         community_include_domains = include_domains or COMMUNITY_SOURCE_DOMAINS
         discovery_hits, search_runs = collect_discovery_hits(
@@ -948,16 +1014,18 @@ def main() -> int:
         )
         trend_summaries = cluster_hits_by_taxonomy(discovery_hits, TREND_THEMES, max_items=max(1, args.max_per_section))
         viewpoint_summaries = cluster_hits_by_taxonomy(discovery_hits, VIEWPOINT_THEMES, max_items=max(1, args.max_per_section))
-        takeaways = build_discovery_takeaways(trend_summaries, viewpoint_summaries)
+        recommendation = pick_blog_topic_recommendation(trend_summaries, viewpoint_summaries, used_topics)
+        if recommendation is None:
+            raise SystemExit("discover mode did not find any candidate topics")
 
         if args.format == "json":
             rendered = json.dumps(
-                discovery_json_payload(args.topic or "", args.days, trend_summaries, viewpoint_summaries, takeaways, search_runs),
+                discovery_json_payload(args.topic or "", args.days, recommendation, search_runs),
                 ensure_ascii=False,
                 indent=2,
             )
         else:
-            rendered = render_discovery_markdown(args.topic or "", args.days, trend_summaries, viewpoint_summaries, takeaways)
+            rendered = render_discovery_markdown(args.topic or "", args.days, recommendation)
     else:
         if not args.topic:
             raise SystemExit("topic mode requires a topic")
