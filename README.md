@@ -28,7 +28,7 @@ dist/
 | [video-gen](skills/video-gen/) | AI 视频生成与编辑，基于火山引擎 Doubao Seedance，支持文生视频、图生视频、有声视频 |
 | [voice-tts](skills/voice-tts/) | 火山引擎语音合成，支持声音复刻音色、语速 / 语调 / 情感控制 |
 | [voice-director](skills/voice-director/) | 用 LLM 为台词自动标注情感、语速、语调，再交给 `voice-tts` 合成 |
-| [ai-topic-research](skills/ai-topic-research/) | 面向 AI 技术主题的联网研究，输入一个粗主题词，自动搜官方资料、最新进展、教程、开源项目和对比观点，并整理成结构化摘要 |
+| [ai-topic-research](skills/ai-topic-research/) | 面向 AI 技术主题与技术社区热点的联网研究；既能研究单个主题，也能先发现社区最近在热议的技术方向和观点 |
 | [openclaw-team-setup](skills/openclaw-team-setup/) | 标准化配置或修复 OpenClaw 多智能体团队，覆盖 agent 拓扑、ACP、Feishu 路由与验证 |
 | [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/) | 在 OpenClaw 环境中切换或重配 OpenAI Codex 账号，并完成登录与连通性验收 |
 | [agent-provisioning](skills/agent-provisioning/) | 创建或修复单个 OpenClaw / ACP agent，并绑定指定的 Feishu 机器人与 routing binding |
