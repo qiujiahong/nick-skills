@@ -23,7 +23,10 @@ WECHAT_MP_APP_ID="wx123..."
 WECHAT_MP_APP_SECRET="abcdef..."
 WECHAT_MP_AUTHOR="Nick"
 WECHAT_MP_THUMB_MEDIA_ID="MEDIA_ID"
+WECHAT_MP_BASE_URL_PROXY="http://115.191.54.20/cgi-bin"
 ```
+
+如果设置了 `WECHAT_MP_BASE_URL_PROXY`，脚本会优先通过这个代理地址访问微信接口。
 
 ## 用法
 

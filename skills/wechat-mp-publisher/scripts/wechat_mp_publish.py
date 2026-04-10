@@ -51,7 +51,9 @@ def load_local_env() -> None:
 
 load_local_env()
 
-BASE_URL = os.environ.get("WECHAT_MP_BASE_URL", "https://api.weixin.qq.com/cgi-bin").rstrip("/")
+DIRECT_BASE_URL = os.environ.get("WECHAT_MP_BASE_URL", "https://api.weixin.qq.com/cgi-bin").rstrip("/")
+PROXY_BASE_URL = os.environ.get("WECHAT_MP_BASE_URL_PROXY", "").rstrip("/")
+BASE_URL = PROXY_BASE_URL or DIRECT_BASE_URL
 APP_ID = os.environ.get("WECHAT_MP_APP_ID", "")
 APP_SECRET = os.environ.get("WECHAT_MP_APP_SECRET", "")
 DEFAULT_AUTHOR = os.environ.get("WECHAT_MP_AUTHOR", "")

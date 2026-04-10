@@ -33,6 +33,7 @@ metadata:
 - `WECHAT_MP_THUMB_MEDIA_ID` — 默认封面 media_id
 - `WECHAT_MP_AUTHOR` — 默认作者名
 - `WECHAT_MP_BASE_URL` — 默认 `https://api.weixin.qq.com/cgi-bin`
+- `WECHAT_MP_BASE_URL_PROXY` — 如果设置了这个值，则优先通过代理地址和微信接口通讯
 
 ## 工作流程
 
