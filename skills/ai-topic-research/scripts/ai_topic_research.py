@@ -806,6 +806,32 @@ def pick_blog_topic_recommendation(
     )
 
 
+def build_writing_suggestions(
+    recommendation: BlogTopicRecommendation,
+    seed_topic: str,
+) -> List[str]:
+    topic = recommendation.topic
+    angle = recommendation.angle
+    suggestions = []
+
+    if angle:
+        suggestions.append(
+            f"标题尽量写成“趋势 + 判断”而不是纯名词解释，比如围绕“{topic.label}”直接给出一个鲜明结论：{angle.label}。"
+        )
+    else:
+        suggestions.append(
+            f"标题不要只写“{topic.label} 是什么”，更适合写成“为什么现在大家开始重新讨论 {topic.label}”。"
+        )
+
+    if any(tag in topic.tags for tag in ["coding-agents", "workflow", "frameworks", "rag", "memory"]):
+        suggestions.append("正文前半段先讲读者最关心的实际收益，比如效率、成本、可靠性或工作流变化，再讲技术细节。")
+    else:
+        suggestions.append("开头先用一个具体场景把主题落地，避免一上来就讲定义，这样更容易把非重度技术读者留住。")
+
+    suggestions.append("正文里至少放 2 个具体链接或案例，并在结尾给出“现在值不值得跟进、适合谁先试”的判断，这类收束更容易获得收藏和转发。")
+    return suggestions[:3]
+
+
 def render_markdown(
     topic: str,
     profile_name: str,
@@ -851,7 +877,7 @@ def render_discovery_markdown(
 ) -> str:
     title = f"{seed_topic} 博客选题推荐" if seed_topic else "AI 博客选题推荐"
     topic = recommendation.topic
-    angle = recommendation.angle
+    writing_suggestions = build_writing_suggestions(recommendation, seed_topic)
     lines = [
         f"# {title}",
         "",
@@ -869,11 +895,6 @@ def render_discovery_markdown(
     if recommendation.fallback_used_topic:
         lines.append("- 备注：候选都与已用主题重叠，这次退回到了热度最高的主题。")
     lines.append("")
-    if angle:
-        lines.append("## 推荐切口")
-        lines.append("")
-        lines.append(f"- {angle.label}")
-        lines.append("")
 
     lines.append("## 支撑链接")
     lines.append("")
@@ -882,13 +903,12 @@ def render_discovery_markdown(
         lines.append(f"  来源：`{hit.domain}`")
         if hit.content:
             lines.append(f"  摘要：{hit.content}")
-    if angle:
-        for hit in angle.hits[:1]:
-            if all(hit.url != existing.url for existing in topic.hits):
-                lines.append(f"- [{hit.title}]({hit.url})")
-                lines.append(f"  来源：`{hit.domain}`")
-                if hit.content:
-                    lines.append(f"  摘要：{hit.content}")
+    lines.append("")
+
+    lines.append("## 写作建议")
+    lines.append("")
+    for item in writing_suggestions:
+        lines.append(f"- {item}")
     lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
@@ -931,6 +951,7 @@ def discovery_json_payload(
     search_runs: Sequence[dict],
 ) -> dict:
     angle = recommendation.angle
+    writing_suggestions = build_writing_suggestions(recommendation, seed_topic)
     return {
         "mode": "discover",
         "seed_topic": seed_topic,
@@ -938,6 +959,7 @@ def discovery_json_payload(
         "community_sources": list(COMMUNITY_SOURCE_DOMAINS),
         "used_topics": recommendation.used_topics,
         "fallback_used_topic": recommendation.fallback_used_topic,
+        "writing_suggestions": writing_suggestions,
         "recommended_topic": {
             "slug": recommendation.topic.slug,
             "label": recommendation.topic.label,
