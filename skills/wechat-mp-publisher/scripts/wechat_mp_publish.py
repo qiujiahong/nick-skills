@@ -77,7 +77,8 @@ H3_STYLE = (
 )
 P_STYLE = "margin: 0 0 18px; text-align: justify;"
 LIST_STYLE = "margin: 0 0 18px 1.4em; padding: 0;"
-LIST_ITEM_STYLE = "margin: 0 0 8px;"
+LIST_ITEM_STYLE = "margin: 0 0 10px; text-align: justify;"
+LIST_MARKER_STYLE = "color: #2563eb; font-weight: 700;"
 BLOCKQUOTE_STYLE = (
     "margin: 22px 0; padding: 12px 16px; border-left: 4px solid #3b82f6; "
     "background: #f8fafc; color: #334155;"
@@ -293,11 +294,13 @@ def markdown_to_html(text: str) -> str:
             if not cleaned_items:
                 list_kind = None
                 return
-            tag = "ol" if list_kind == "ol" else "ul"
-            out.append(f'<{tag} style="{LIST_STYLE}">')
-            for item in cleaned_items:
-                out.append(f'<li style="{LIST_ITEM_STYLE}">{inline_markdown_to_html(item)}</li>')
-            out.append(f"</{tag}>")
+            for index, item in enumerate(cleaned_items, start=1):
+                marker = f"{index}." if list_kind == "ol" else "&bull;"
+                out.append(
+                    f'<p style="{LIST_ITEM_STYLE}">'
+                    f'<span style="{LIST_MARKER_STYLE}">{marker}</span> '
+                    f'{inline_markdown_to_html(item)}</p>'
+                )
             list_kind = None
 
     def flush_code_block() -> None:
