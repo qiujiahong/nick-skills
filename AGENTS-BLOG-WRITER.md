@@ -5,6 +5,7 @@
 目标：
 
 - 先选题
+- 再补素材
 - 再生成博客目录
 - 再生成整套配图
 - 最后生成公众号草稿并发布
@@ -50,14 +51,40 @@ tech-blog-writer/YYYYMMDD/<topic-slug>/
 - 支撑链接
 - 写作建议
 
-### 2. 写博客
+### 2. 补素材
+
+不要拿 `discover` 的输出直接开写。
+
+先围绕已选主题再做一轮搜索，补出真正可写作的素材资料。
+
+建议输入：
+
+- 选择主题
+- discover 阶段给出的支撑链接
+- 当前想面向的读者场景，例如 `AI编程`、`Agent`、`企业知识助手`
+
+建议输出：
+
+- `素材资料`
+  - 关键事实
+  - 关键观点
+  - 可用案例
+  - 可吸收的对比角度
+
+要求：
+
+- 素材阶段的目标是“给写作补料”，不是直接产出博客
+- 尽量把资料整理成笔记式输入，而不是一串裸链接
+- 后续写文时默认吸收这些资料，不在正文中途点名引用“某篇文章说”
+
+### 3. 写博客
 
 再调用 `tech-blog-writer`。
 
 输入：
 
 - 选择主题
-- 支撑链接
+- 素材资料
 - 写作建议
 
 输出：
@@ -73,7 +100,7 @@ tech-blog-writer/YYYYMMDD/<topic-slug>/
 - `image-requirements.md` 里的图片编号，必须和 `blog.md` 中占位符一一对应
 - 同一篇文章的图片文件名尽量复用同一个时间标签，便于发布时去重和追踪
 
-### 3. 生成配图
+### 4. 生成配图
 
 最后调用 `image-gen`，逐张生成 `assets/` 里的图片文件。
 
@@ -89,7 +116,7 @@ tech-blog-writer/YYYYMMDD/<topic-slug>/
 - `assets/配图3-YYYYMMDD-HHMMSS.png`
 - ...
 
-### 4. 发布到公众号
+### 5. 发布到公众号
 
 最后调用 `wechat-mp-publisher`。
 
@@ -186,15 +213,17 @@ tech-blog-writer/YYYYMMDD/<topic-slug>/
 未来 agent 调用时，默认按这个顺序：
 
 1. `ai-topic-research`
-2. `tech-blog-writer`
-3. `image-gen`
-4. `wechat-mp-publisher`
+2. 围绕已选主题补素材
+3. `tech-blog-writer`
+4. `image-gen`
+5. `wechat-mp-publisher`
 
 不要跳过中间产物。
 
 原因：
 
 - 选题卡片是写作输入
+- 素材资料决定文章论据和结构
 - 写作结果决定配图需求
 - 配图要求再决定图片 prompt
 

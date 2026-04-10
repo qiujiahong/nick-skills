@@ -288,12 +288,16 @@ def markdown_to_html(text: str) -> str:
     def flush_list() -> None:
         nonlocal list_kind
         if list_items and list_kind:
+            cleaned_items = [item.strip() for item in list_items if item.strip()]
+            list_items.clear()
+            if not cleaned_items:
+                list_kind = None
+                return
             tag = "ol" if list_kind == "ol" else "ul"
             out.append(f'<{tag} style="{LIST_STYLE}">')
-            for item in list_items:
+            for item in cleaned_items:
                 out.append(f'<li style="{LIST_ITEM_STYLE}">{inline_markdown_to_html(item)}</li>')
             out.append(f"</{tag}>")
-            list_items.clear()
             list_kind = None
 
     def flush_code_block() -> None:
