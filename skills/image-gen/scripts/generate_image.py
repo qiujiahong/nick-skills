@@ -47,12 +47,16 @@ BASE_URL = os.environ.get("IMAGE_GEN_BASE_URL", "https://api.apiyi.com")
 DEFAULT_MODEL = os.environ.get("IMAGE_GEN_MODEL", "gemini-3.1-flash-image-preview")
 DEFAULT_ASPECT_RATIO = os.environ.get("IMAGE_GEN_ASPECT_RATIO", "16:9")
 DEFAULT_IMAGE_SIZE = os.environ.get("IMAGE_GEN_IMAGE_SIZE", "2K")
+API_STYLE = os.environ.get(
+    "IMAGE_GEN_API_STYLE",
+    "xheai" if "xheai" in BASE_URL else "gemini",
+).lower()
 ALLOWED_ASPECT_RATIOS = {
     "1:1", "1:4", "4:1", "1:8", "8:1",
     "2:3", "3:2", "3:4", "4:3", "4:5", "5:4",
     "9:16", "16:9", "21:9",
 }
-ALLOWED_IMAGE_SIZES = {"standard", "2K", "4K"}
+ALLOWED_IMAGE_SIZES = {"standard", "1k", "1K", "2k", "2K", "4k", "4K"}
 
 
 def _call_api_with_curl(url: str, payload: dict) -> dict:
@@ -107,6 +111,39 @@ def _call_api_with_urllib(url: str, payload: dict) -> dict:
         raise RuntimeError(f"network error: {e}")
 
 
+def _call_multipart_with_curl(url: str, fields: dict, image_paths: List[str]) -> dict:
+    curl_bin = shutil.which("curl")
+    if not curl_bin:
+        raise RuntimeError("curl not found")
+
+    command = [
+        curl_bin,
+        "--silent",
+        "--show-error",
+        "--max-time",
+        "300",
+        "--location",
+        "--request",
+        "POST",
+        url,
+        "-H",
+        f"Authorization: Bearer {API_KEY}",
+    ]
+    for key, value in fields.items():
+        command.extend(["--form", f'{key}="{value}"'])
+    for image_path in image_paths:
+        command.extend(["--form", f"image=@{image_path}"])
+
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "curl multipart request failed")
+
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"invalid JSON response: {e}; body={result.stdout[:2000]}")
+
+
 def call_api(url: str, payload: dict) -> dict:
     errors = []
 
@@ -121,6 +158,12 @@ def call_api(url: str, payload: dict) -> dict:
         errors.append(f"urllib failed: {e}")
 
     raise RuntimeError("; ".join(errors))
+
+
+def normalize_image_size(image_size: str) -> str:
+    if API_STYLE == "xheai" and image_size == "standard":
+        return "1k"
+    return image_size
 
 
 def validate_args(aspect_ratio: str, image_size: str, input_images: List[str]) -> None:
@@ -150,12 +193,10 @@ def encode_image_part(image_path: str) -> dict:
     if not mime_type:
         mime_type = "image/png"
 
-    return {
-        "inlineData": {
-            "mimeType": mime_type,
-            "data": base64.b64encode(path.read_bytes()).decode("utf-8"),
-        }
-    }
+    encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
+    if API_STYLE == "xheai":
+        return {"inline_data": {"mime_type": mime_type, "data": encoded}}
+    return {"inlineData": {"mimeType": mime_type, "data": encoded}}
 
 
 def build_parts(prompt: str, input_images: List[str]) -> List[dict]:
@@ -164,6 +205,121 @@ def build_parts(prompt: str, input_images: List[str]) -> List[dict]:
         parts.append(encode_image_part(image_path))
     parts.append({"text": prompt})
     return parts
+
+
+def build_payload(prompt: str, aspect_ratio: str, image_size: str, input_images: List[str]) -> dict:
+    if API_STYLE == "xheai":
+        return {
+            "contents": [{"role": "user", "parts": build_parts(prompt, input_images)}],
+            "generationConfig": {
+                "responseModalities": ["IMAGE"],
+                "temperature": 0.8,
+                "topP": 0.95,
+                "maxOutputTokens": 8192,
+                "seed": 0,
+                "imageConfig": {
+                    "aspect_ratio": aspect_ratio,
+                    "image_size": image_size,
+                    "output_options": {"compression_quality": 100},
+                },
+            },
+            "response_format": "url",
+        }
+
+    return {
+        "contents": [{"parts": build_parts(prompt, input_images)}],
+        "generationConfig": {
+            "responseModalities": ["IMAGE"],
+            "imageConfig": {
+                "aspectRatio": aspect_ratio,
+                "imageSize": image_size,
+            },
+        },
+    }
+
+
+def call_image_api(
+    prompt: str,
+    model: str,
+    aspect_ratio: str,
+    image_size: str,
+    input_images: List[str],
+) -> dict:
+    image_size = normalize_image_size(image_size)
+    if API_STYLE == "xheai":
+        if input_images:
+            url = f"{BASE_URL}/v1/images/edits"
+            return _call_multipart_with_curl(
+                url,
+                {
+                    "model": model,
+                    "prompt": prompt,
+                    "aspect_ratio": aspect_ratio,
+                    "image_size": image_size,
+                    "response_format": "url",
+                },
+                input_images,
+            )
+        url = f"{BASE_URL}/v1/images/generations"
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "image_size": image_size,
+            "response_format": "url",
+        }
+        return call_api(url, payload)
+
+    url = f"{BASE_URL}/v1beta/models/{model}:generateContent"
+    payload = build_payload(prompt, aspect_ratio, image_size, input_images)
+    return call_api(url, payload)
+
+
+def write_image_from_response(result: dict, output_path: Optional[str]) -> str:
+    image_bytes = None
+    ext = "png"
+
+    data_items = result.get("data")
+    if isinstance(data_items, list) and data_items:
+        item = data_items[0]
+        if item.get("b64_json"):
+            image_bytes = base64.b64decode(item["b64_json"])
+        elif item.get("url"):
+            with urlopen(item["url"], timeout=300) as resp:
+                image_bytes = resp.read()
+                content_type = resp.headers.get("Content-Type", "")
+                if "/" in content_type:
+                    ext = content_type.split("/")[-1].split(";")[0] or ext
+
+    if image_bytes is None:
+        try:
+            parts = result["candidates"][0]["content"]["parts"]
+        except Exception:
+            print(f"ERROR: Unexpected response structure: {result}", file=sys.stderr)
+            sys.exit(1)
+
+        image_data = None
+        for part in parts:
+            if "inlineData" in part and part["inlineData"].get("data"):
+                image_data = part["inlineData"]
+                break
+            if "inline_data" in part and part["inline_data"].get("data"):
+                image_data = part["inline_data"]
+                break
+
+        if not image_data:
+            print(f"ERROR: No image found in response: {result}", file=sys.stderr)
+            sys.exit(1)
+
+        image_bytes = base64.b64decode(image_data["data"])
+        mime_type = image_data.get("mimeType") or image_data.get("mime_type") or "image/png"
+        ext = mime_type.split("/")[-1] if "/" in mime_type else "png"
+
+    out_file = Path(output_path) if output_path else Path.cwd() / f"generated_image.{ext}"
+    out_file.write_bytes(image_bytes)
+    print(f"Image saved to: {out_file}", file=sys.stderr)
+    print(str(out_file))
+    return str(out_file)
 
 
 def generate_image(
@@ -183,18 +339,6 @@ def generate_image(
     input_images = input_images or []
     validate_args(aspect_ratio, image_size, input_images)
 
-    url = f"{BASE_URL}/v1beta/models/{model}:generateContent"
-    payload = {
-        "contents": [{"parts": build_parts(prompt, input_images)}],
-        "generationConfig": {
-            "responseModalities": ["IMAGE"],
-            "imageConfig": {
-                "aspectRatio": aspect_ratio,
-                "imageSize": image_size,
-            },
-        },
-    }
-
     mode = "text-to-image"
     if len(input_images) == 1:
         mode = "image-to-image"
@@ -203,41 +347,17 @@ def generate_image(
 
     print(f"Generating image with model: {model}", file=sys.stderr)
     print(f"Mode: {mode}", file=sys.stderr)
+    print(f"API style: {API_STYLE}", file=sys.stderr)
     print(f"Aspect ratio: {aspect_ratio}, image size: {image_size}", file=sys.stderr)
     print(f"Prompt: {prompt[:120]}...", file=sys.stderr)
 
     try:
-        result = call_api(url, payload)
+        result = call_image_api(prompt, model, aspect_ratio, image_size, input_images)
     except Exception as e:
         print(f"ERROR: API call failed: {e}", file=sys.stderr)
         sys.exit(1)
 
-    try:
-        parts = result["candidates"][0]["content"]["parts"]
-    except Exception:
-        print(f"ERROR: Unexpected response structure: {result}", file=sys.stderr)
-        sys.exit(1)
-
-    image_data = None
-    for part in parts:
-        if "inlineData" in part and part["inlineData"].get("data"):
-            image_data = part["inlineData"]
-            break
-
-    if not image_data:
-        print(f"ERROR: No image found in response: {result}", file=sys.stderr)
-        sys.exit(1)
-
-    img_bytes = base64.b64decode(image_data["data"])
-    mime_type = image_data.get("mimeType", "image/png")
-    ext = mime_type.split("/")[-1] if "/" in mime_type else "png"
-
-    out_file = Path(output_path) if output_path else Path.cwd() / f"generated_image.{ext}"
-    out_file.write_bytes(img_bytes)
-
-    print(f"Image saved to: {out_file}", file=sys.stderr)
-    print(str(out_file))
-    return str(out_file)
+    return write_image_from_response(result, output_path)
 
 
 if __name__ == "__main__":
