@@ -295,7 +295,7 @@ def markdown_to_html(text: str) -> str:
                 list_kind = None
                 return
             for index, item in enumerate(cleaned_items, start=1):
-                marker = f"{index}." if list_kind == "ol" else "&bull;"
+                marker = f"{index}." if list_kind == "ol" else "\u2022"
                 out.append(
                     f'<p style="{LIST_ITEM_STYLE}">'
                     f'<span style="{LIST_MARKER_STYLE}">{marker}</span> '

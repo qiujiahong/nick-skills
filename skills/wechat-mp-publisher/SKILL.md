@@ -121,6 +121,6 @@ python3 scripts/wechat_mp_publish.py get-publish-status --publish-id <PUBLISH_ID
 - `publish`：提交发布草稿
 - `get-publish-status`：查询发布进度
 - Markdown 会先做基础美化，再转成更适合公众号阅读的 HTML
-- Markdown 列表发布前会渲染为带项目符号/序号的段落，而不是原生 `<ul>/<ol>/<li>`，避免公众号编辑器把空行或列表间距重排成空圆点
+- Markdown 列表发布前会渲染为带真实项目符号/序号的段落，而不是原生 `<ul>/<ol>/<li>` 或 `&bull;` 实体，避免公众号编辑器把空行、列表间距或 HTML entity 重排成异常文本
 - 如果 Markdown 里是本地图片路径，脚本会先上传，再替换成公众号可访问的图片 URL
 - `rendered-html-output` 可把最终发送给公众号的 HTML 落盘，方便人工预览
