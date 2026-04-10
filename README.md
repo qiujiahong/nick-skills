@@ -30,7 +30,7 @@ dist/
 | [voice-tts](skills/voice-tts/) | 火山引擎语音合成，支持声音复刻音色、语速 / 语调 / 情感控制 |
 | [voice-director](skills/voice-director/) | 用 LLM 为台词自动标注情感、语速、语调，再交给 `voice-tts` 合成 |
 | [ai-topic-research](skills/ai-topic-research/) | 面向 AI 技术主题与技术社区热点的联网研究；既能研究单个主题，也能从社区热点里只推荐 1 个适合写博客的主题 |
-| [tech-blog-writer](skills/tech-blog-writer/) | 根据“已选主题 + 支撑链接 + 写作建议”生成博客文件夹，包含 `blog.md` 和 `image-requirements.md`，并在正文里自动预留配图占位符 |
+| [tech-blog-writer](skills/tech-blog-writer/) | 根据“已选主题 + 支撑链接 + 写作建议”在 `tech-blog-writer/YYYYMMDD/` 下生成博客文件夹，包含 `blog.md` 和 `image-requirements.md`，并在正文里自动预留配图占位符 |
 | [openclaw-team-setup](skills/openclaw-team-setup/) | 标准化配置或修复 OpenClaw 多智能体团队，覆盖 agent 拓扑、ACP、Feishu 路由与验证 |
 | [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/) | 在 OpenClaw 环境中切换或重配 OpenAI Codex 账号，并完成登录与连通性验收 |
 | [agent-provisioning](skills/agent-provisioning/) | 创建或修复单个 OpenClaw / ACP agent，并绑定指定的 Feishu 机器人与 routing binding |
@@ -96,7 +96,7 @@ export TAVILY_SEARCH_BASE_URL="https://api.tavily.com"
 - 视频生成直接看 [video-gen](skills/video-gen/)。
 - 需要更有表现力的配音时，先用 [voice-director](skills/voice-director/) 标注，再用 [voice-tts](skills/voice-tts/) 合成。
 - 需要围绕 `MCP`、`RAG`、`AI Coding Agent`、`Responses API` 这类主题快速做第一轮资料研究时，使用 [ai-topic-research](skills/ai-topic-research/)。
-- 需要把“选题 + 支撑链接 + 写作建议”整理成博客文件夹，并输出正文与配图要求时，使用 [tech-blog-writer](skills/tech-blog-writer/)。
+- 需要把“选题 + 支撑链接 + 写作建议”整理成博客文件夹，并输出正文与配图要求时，使用 [tech-blog-writer](skills/tech-blog-writer/)，默认产物放在 `tech-blog-writer/YYYYMMDD/`。
 - 需要搭建或修复 OpenClaw 项目团队时，使用 [openclaw-team-setup](skills/openclaw-team-setup/)。
 - 需要切换 OpenClaw 上的 Codex OAuth 账号时，使用 [openclaw-codex-account-switch](skills/openclaw-codex-account-switch/)。
 - 需要新建单个 agent、绑定 Feishu 机器人并校验状态时，使用 [agent-provisioning](skills/agent-provisioning/)。
