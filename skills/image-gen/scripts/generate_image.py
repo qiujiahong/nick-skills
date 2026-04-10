@@ -17,6 +17,31 @@ from typing import Optional, List
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+SKILL_DIR = SCRIPT_DIR.parent
+
+
+def load_env_file(path: Path) -> None:
+    if not path.exists() or not path.is_file():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+def load_local_env() -> None:
+    for name in (".env.local", ".env"):
+        load_env_file(SKILL_DIR / name)
+
+
+load_local_env()
+
 API_KEY = os.environ.get("IMAGE_GEN_API_KEY", "")
 BASE_URL = os.environ.get("IMAGE_GEN_BASE_URL", "https://api.apiyi.com")
 DEFAULT_MODEL = os.environ.get("IMAGE_GEN_MODEL", "gemini-3.1-flash-image-preview")

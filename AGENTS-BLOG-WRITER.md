@@ -7,6 +7,7 @@
 - 先选题
 - 再生成博客目录
 - 再生成整套配图
+- 最后生成公众号草稿并发布
 - 让不同 agent 后续都按同一套路径和节奏执行
 
 ## 目录约定
@@ -29,7 +30,7 @@ tech-blog-writer/YYYYMMDD/<topic-slug>/
 说明：
 
 - `blog.md`：博客正文
-- `image-requirements.md`：配图要求
+- `image-requirements.md`：配图要求，包含整体要求、封面图和正文配图
 - `assets/`：实际图片文件
 
 ## 标准流程
@@ -66,9 +67,11 @@ tech-blog-writer/YYYYMMDD/<topic-slug>/
 
 要求：
 
-- `blog.md` 里必须预留图片占位符，例如 `[配图1](./assets/配图1.png)`
+- `blog.md` 里必须预留图片占位符，例如 `[配图1](./assets/配图1-YYYYMMDD-HHMMSS.png)`
 - `image-requirements.md` 开头必须先写“整体要求”
+- `image-requirements.md` 必须额外包含 1 张封面图
 - `image-requirements.md` 里的图片编号，必须和 `blog.md` 中占位符一一对应
+- 同一篇文章的图片文件名尽量复用同一个时间标签，便于发布时去重和追踪
 
 ### 3. 生成配图
 
@@ -80,10 +83,28 @@ tech-blog-writer/YYYYMMDD/<topic-slug>/
 
 输出目标：
 
-- `assets/配图1.png`
-- `assets/配图2.png`
-- `assets/配图3.png`
+- `assets/封面图-YYYYMMDD-HHMMSS.png`
+- `assets/配图1-YYYYMMDD-HHMMSS.png`
+- `assets/配图2-YYYYMMDD-HHMMSS.png`
+- `assets/配图3-YYYYMMDD-HHMMSS.png`
 - ...
+
+### 4. 发布到公众号
+
+最后调用 `wechat-mp-publisher`。
+
+建议顺序：
+
+1. 先用 `render-content` 生成公众号风格 HTML，本地预览
+2. 再用 `create-draft` 创建草稿
+3. 用户确认后，才调用 `publish`
+
+封面图和正文图片规则：
+
+- 封面图：上传为公众号素材，拿到 `thumb_media_id`
+- 正文图片：上传为公众号正文图片 URL，再替换进 HTML
+- `create-draft` 可以直接接受本地 `--thumb-file`，脚本内部会先上传封面图
+- Markdown 里的本地图片路径，脚本会在创建草稿前自动上传并替换
 
 ## 图片生成并发规则
 
@@ -141,6 +162,7 @@ tech-blog-writer/YYYYMMDD/<topic-slug>/
 
 再叠加每张图自己的：
 
+- 文件名
 - 用途
 - 内容
 - 比例
@@ -153,8 +175,11 @@ tech-blog-writer/YYYYMMDD/<topic-slug>/
 - `blog.md` 存在
 - `image-requirements.md` 存在
 - `assets/` 存在
-- `blog.md` 中所有 `[配图N](./assets/配图N.png)` 都有对应文件
+- `image-requirements.md` 中存在封面图要求
+- `blog.md` 中所有 `[配图N](./assets/配图N-YYYYMMDD-HHMMSS.png)` 都有对应文件
 - `image-requirements.md` 中列出的图片数量，和实际生成数量一致
+- 封面图文件存在
+- 发布前能产出本地渲染 HTML
 
 ## 当前推荐顺序
 
@@ -163,6 +188,7 @@ tech-blog-writer/YYYYMMDD/<topic-slug>/
 1. `ai-topic-research`
 2. `tech-blog-writer`
 3. `image-gen`
+4. `wechat-mp-publisher`
 
 不要跳过中间产物。
 
