@@ -1,2 +1,5 @@
 .DS_Store
 dist/
+
+blog-output/
+tech-blog-writer
