@@ -4,3 +4,4 @@ dist/
 blog-output/
 /tech-blog-writer/
 /teaching-video/
+.rda-session-internal/
