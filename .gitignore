@@ -4,3 +4,21 @@ dist/
 blog-output/
 /tech-blog-writer/
 /teaching-video/
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
+
+# Credential material
+*.key
+*.pem
+*.p12
+*.pfx
+*.secret
+secrets/
+credentials/
+tokens/
