@@ -1,0 +1,4 @@
+interface:
+  display_name: "Teaching Video Maker"
+  short_description: "Generate voiced teaching videos with Remotion."
+  default_prompt: "Use $teaching-video-maker to create a voiced teaching video for this topic:"

@@ -1,6 +1,6 @@
 # nick-skills
 
-OpenClaw / Codex 可复用技能集合，包含图像生成、视频生成、语音合成、语音导演、技术博客生产链，以及 OpenClaw 团队配置类 skill。
+OpenClaw / Codex 可复用技能集合，包含图像生成、视频生成、语音合成、语音导演、教学视频生成、技术博客生产链，以及 OpenClaw 团队配置类 skill。
 
 ## 目录结构
 
@@ -8,6 +8,7 @@ OpenClaw / Codex 可复用技能集合，包含图像生成、视频生成、语
 skills/
   image-gen/
   video-gen/
+  teaching-video-maker/
   voice-tts/
   voice-director/
   ai-topic-research/
@@ -29,6 +30,7 @@ dist/
 |-------|------|
 | [image-gen](skills/image-gen/) | AI 图像生成与编辑，支持文生图、图+文生图、风格转换，多比例与标准 / 2K / 4K 分辨率 |
 | [video-gen](skills/video-gen/) | AI 视频生成与编辑，基于火山引擎 Doubao Seedance，支持文生视频、图生视频、有声视频 |
+| [teaching-video-maker](skills/teaching-video-maker/) | 生成有声音的教学视频；调用 `remotion` skill 编排画面，并使用本地 `microsoft/VibeVoice-1.5B` 或可配置 VibeVoice 服务生成拟人旁白，支持授权声音克隆 |
 | [voice-tts](skills/voice-tts/) | 火山引擎语音合成，支持声音复刻音色、语速 / 语调 / 情感控制 |
 | [voice-director](skills/voice-director/) | 用 LLM 为台词自动标注情感、语速、语调，再交给 `voice-tts` 合成 |
 | [ai-topic-research](skills/ai-topic-research/) | 面向 AI 技术主题与技术社区热点的联网研究；既能研究单个主题，也能从社区热点里只推荐 1 个适合写博客的主题 |
@@ -103,6 +105,24 @@ export VIDEO_GEN_API_KEY="your-api-key"
 export VIDEO_GEN_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
 ```
 
+### teaching-video-maker
+
+第一次使用前安装 Remotion skill：
+
+```bash
+npx skills add https://github.com/google-labs-code/stitch-skills --skill remotion
+```
+
+默认使用本地 VibeVoice：
+
+```bash
+export TEACHING_VIDEO_TTS_ENGINE="vibevoice"
+export VIBEVOICE_MODEL="microsoft/VibeVoice-1.5B"
+export VIBEVOICE_ENDPOINT="http://127.0.0.1:7860"
+# 可选：授权声音克隆参考音频
+export VIBEVOICE_VOICE_REF="/absolute/path/to/authorized-reference.wav"
+```
+
 ### voice-tts
 
 ```bash
@@ -137,6 +157,7 @@ export WECHAT_MP_APP_SECRET="your-app-secret"
 
 - 图像生成直接看 [image-gen](skills/image-gen/)。
 - 视频生成直接看 [video-gen](skills/video-gen/)。
+- 需要根据主题生成有声音的教学视频时，使用 [teaching-video-maker](skills/teaching-video-maker/)；输入“视频主题”必填，“内容要求 / 风格要求 / 时间要求”可选，默认 3 分钟、简洁科技风、本地 VibeVoice 旁白。
 - 需要更有表现力的配音时，先用 [voice-director](skills/voice-director/) 标注，再用 [voice-tts](skills/voice-tts/) 合成。
 - 需要围绕 `MCP`、`RAG`、`AI Coding Agent`、`Responses API` 这类主题快速做第一轮资料研究时，使用 [ai-topic-research](skills/ai-topic-research/)。
 - 需要完整生产技术博客时，按 `ai-topic-research -> 补素材 -> tech-blog-writer -> image-gen -> wechat-mp-publisher` 的顺序执行。
