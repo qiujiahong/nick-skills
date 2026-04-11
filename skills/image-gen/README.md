@@ -123,9 +123,18 @@ python3 scripts/generate_image.py \
 - `prompt`：提示词
 - `--model`：模型名，默认 `gemini-3.1-flash-image-preview`
 - `--aspect-ratio`：比例
-- `--image-size`：尺寸
+- `--image-size`：尺寸，支持 `standard`、`1k`、`1K`、`2k`、`2K`、`4k`、`4K`
 - `--input-image`：输入图，可重复使用
 - `--output`：输出文件路径
+
+## 环境变量参数
+
+- `IMAGE_GEN_API_KEY`：API 密钥
+- `IMAGE_GEN_BASE_URL`：API 地址，例如 `https://api.xheai.cc`
+- `IMAGE_GEN_MODEL`：默认模型，例如 `gemini-3.1-flash-image-preview`
+- `IMAGE_GEN_ASPECT_RATIO`：默认比例，例如 `16:9`
+- `IMAGE_GEN_IMAGE_SIZE`：默认尺寸，例如 `1k`
+- `IMAGE_GEN_API_STYLE`：接口格式，可选 `gemini` 或 `xheai`
 
 ## 默认模型
 
