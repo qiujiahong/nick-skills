@@ -363,7 +363,7 @@ def generate_image(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate image with Gemini Flash Image Preview")
+    parser = argparse.ArgumentParser(description="Generate images with Gemini or xheai-compatible APIs")
     parser.add_argument("prompt", help="Text prompt for image generation")
     parser.add_argument("--model", "-m", default=DEFAULT_MODEL, help="Model to use")
     parser.add_argument("--output", "-o", help="Output file path")
@@ -372,7 +372,11 @@ if __name__ == "__main__":
         default=DEFAULT_ASPECT_RATIO,
         help="Aspect ratio. Supported: 1:1, 1:4, 4:1, 1:8, 8:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9",
     )
-    parser.add_argument("--image-size", default=DEFAULT_IMAGE_SIZE, help="Image size: standard, 2K, 4K")
+    parser.add_argument(
+        "--image-size",
+        default=DEFAULT_IMAGE_SIZE,
+        help="Image size: standard, 1k, 1K, 2k, 2K, 4k, 4K",
+    )
     parser.add_argument(
         "--input-image",
         action="append",
