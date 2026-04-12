@@ -21,6 +21,7 @@ Inside `teaching-video/YYYYMMDD/<topic-slug>/`:
 - `timing.json`：machine-readable timing contract
 - `audio/scene-XX.wav`：VibeVoice output
 - `remotion/`：Remotion project
+- `remotion/public/audio/scene-XX.wav`：copy of scene audio for Remotion `staticFile()`
 - `output/<topic-slug>.mp4`：final voiced video
 
 ## timing.json Shape
@@ -39,7 +40,7 @@ Inside `teaching-video/YYYYMMDD/<topic-slug>/`:
       "title": "开场：学完能做什么",
       "startSec": 0,
       "durationSec": 14.2,
-      "audioFile": "../audio/scene-01.wav",
+      "audioFile": "audio/scene-01.wav",
       "narration": "这段旁白文本",
       "visuals": [
         "大标题",
@@ -59,7 +60,8 @@ Inside `teaching-video/YYYYMMDD/<topic-slug>/`:
 - Use measured audio durations to calculate `startSec`.
 - Convert seconds to frames with `Math.round(sec * fps)`.
 - Put each scene in a Remotion `<Sequence>` whose duration matches the measured audio.
-- Place the scene audio inside the same `<Sequence>` using Remotion `<Audio>`.
+- Copy scene audio into `remotion/public/audio/` and place it inside the same `<Sequence>` using `<Audio src={staticFile(scene.audioFile)} />`.
+- Do not pass `../audio/...` or other relative paths to `staticFile()`; Remotion only serves files from `public/`.
 - Visual text should appear no later than 0.5 seconds after the corresponding narration phrase.
 - If an animation needs extra reading time, add silence or rewrite narration; do not make visuals lag behind speech.
 

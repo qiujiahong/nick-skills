@@ -119,8 +119,17 @@ npx skills add https://github.com/google-labs-code/stitch-skills --skill remotio
 export TEACHING_VIDEO_TTS_ENGINE="vibevoice"
 export VIBEVOICE_MODEL="microsoft/VibeVoice-1.5B"
 export VIBEVOICE_ENDPOINT="http://127.0.0.1:7860"
+export VIBEVOICE_SPEAKER_ID="Bowen"
+export VIBEVOICE_SEED="1227"
 # 可选：授权声音克隆参考音频
 export VIBEVOICE_VOICE_REF="/absolute/path/to/authorized-reference.wav"
+```
+
+如果本地没有可用的 VibeVoice endpoint 或命令，先运行：
+
+```bash
+skills/teaching-video-maker/scripts/ensure_vibevoice.sh
+source "$HOME/.cache/nick-skills/vibevoice/env.sh"
 ```
 
 ### voice-tts
