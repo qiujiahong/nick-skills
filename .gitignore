@@ -4,6 +4,7 @@ dist/
 blog-output/
 /tech-blog-writer/
 /teaching-video/
+/countryhuman-video/
 .rda-session-internal/
 
 # Local secrets and environment files

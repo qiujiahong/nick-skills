@@ -9,6 +9,7 @@ skills/
   image-gen/
   video-gen/
   teaching-video-maker/
+  countryhuman-video-maker/
   voice-tts/
   voice-director/
   ai-topic-research/
@@ -31,6 +32,7 @@ dist/
 | [image-gen](skills/image-gen/) | AI 图像生成与编辑，支持文生图、图+文生图、风格转换，多比例与标准 / 2K / 4K 分辨率 |
 | [video-gen](skills/video-gen/) | AI 视频生成与编辑，基于火山引擎 Doubao Seedance，支持文生视频、图生视频、有声视频 |
 | [teaching-video-maker](skills/teaching-video-maker/) | 生成有声音的教学视频；调用 `remotion` skill 编排画面，并把旁白合成交给本地 `voice-tts` |
+| [countryhuman-video-maker](skills/countryhuman-video-maker/) | 生成 CH / countryhuman 风格的有声角色对话视频，支持 兔子、骆驼、鹰酱 等三角色地缘故事 |
 | [voice-tts](skills/voice-tts/) | 本地语音合成，基于 `microsoft/VibeVoice-1.5B`，不调用远程 TTS API，支持授权本地声音参考 |
 | [voice-director](skills/voice-director/) | 用 LLM 为台词自动标注情感、语速、语调；`voice-tts` 会在本地合成时去掉不支持的标记 |
 | [ai-topic-research](skills/ai-topic-research/) | 面向 AI 技术主题与技术社区热点的联网研究；既能研究单个主题，也能从社区热点里只推荐 1 个适合写博客的主题 |
@@ -175,6 +177,7 @@ export WECHAT_MP_APP_SECRET="your-app-secret"
 - 图像生成直接看 [image-gen](skills/image-gen/)。
 - 视频生成直接看 [video-gen](skills/video-gen/)。
 - 需要根据主题生成有声音的教学视频时，使用 [teaching-video-maker](skills/teaching-video-maker/)；输入“视频主题”必填，“内容要求 / 风格要求 / 时间要求”可选，默认 3 分钟、简洁科技风，并通过本地 [voice-tts](skills/voice-tts/) 生成旁白。
+- 需要制作 CH / countryhuman 风格的多角色对话视频时，使用 [countryhuman-video-maker](skills/countryhuman-video-maker/)；默认三幕结构，输出脚本、分镜、本地配音、mp4 和视频号发布文案。
 - 需要普通文字转语音或教学旁白时，直接使用 [voice-tts](skills/voice-tts/)，默认本地 VibeVoice，不走远程 TTS。
 - 需要围绕 `MCP`、`RAG`、`AI Coding Agent`、`Responses API` 这类主题快速做第一轮资料研究时，使用 [ai-topic-research](skills/ai-topic-research/)。
 - 需要完整生产技术博客时，按 `ai-topic-research -> 补素材 -> tech-blog-writer -> image-gen -> wechat-mp-publisher` 的顺序执行。
