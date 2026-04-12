@@ -69,14 +69,6 @@ pick_python() {
   exit 1
 }
 
-endpoint_is_usable() {
-  local endpoint="${VIBEVOICE_ENDPOINT:-}"
-  if [[ -z "$endpoint" ]]; then
-    return 1
-  fi
-  curl -fsS --max-time 5 "${endpoint%/}" >/dev/null 2>&1
-}
-
 download_source_zip() {
   local zip_path="$DEPLOY_DIR/source.zip"
   command -v curl >/dev/null 2>&1 || {
@@ -155,7 +147,7 @@ write_env_file() {
     esac
   fi
   cat >"$ENV_FILE" <<EOF
-export TEACHING_VIDEO_TTS_ENGINE="vibevoice"
+export VOICE_TTS_ENGINE="vibevoice"
 export VIBEVOICE_MODEL="$MODEL"
 export VIBEVOICE_LANGUAGE="$LANGUAGE"
 export VIBEVOICE_SPEAKER_ID="$speaker_id"
@@ -168,13 +160,8 @@ EOF
 }
 
 main() {
-  if endpoint_is_usable; then
-    log "VibeVoice endpoint is already usable: ${VIBEVOICE_ENDPOINT%/}"
-    exit 0
-  fi
-
-  if [[ -n "${VIBEVOICE_TTS_CMD:-}" ]]; then
-    log "VIBEVOICE_TTS_CMD is already configured"
+  if [[ -n "${VIBEVOICE_TTS_CMD:-}" && "${VOICE_TTS_ALLOW_CUSTOM_CMD:-0}" == "1" ]]; then
+    log "Using existing VIBEVOICE_TTS_CMD because VOICE_TTS_ALLOW_CUSTOM_CMD=1"
     exit 0
   fi
 
@@ -187,7 +174,7 @@ main() {
 
 VibeVoice local command deployment is ready.
 
-Load it in the current shell before generating teaching-video audio:
+Load it in the current shell before generating audio:
 
   source "$ENV_FILE"
 

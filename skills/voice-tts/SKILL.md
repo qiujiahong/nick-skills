@@ -1,125 +1,78 @@
 ---
 name: voice-tts
-description: 火山引擎语音合成（支持声音复刻音色）。当用户要求语音合成、文字转语音、TTS、用克隆声音朗读时使用此 skill。支持语速、语调、情感控制。
+description: 本地语音合成 / TTS。Use when the user asks to synthesize speech, generate narration audio, create local TTS output, use microsoft/VibeVoice-1.5B, or generate teaching-video narration. Uses local VibeVoice only; do not call remote/cloud TTS APIs.
 ---
 
-# 语音合成 (Voice TTS)
+# Voice TTS
 
-基于火山引擎 OpenSpeech API，支持使用声音复刻音色进行语音合成。
+把文本合成为本地音频。默认使用本机部署的 `microsoft/VibeVoice-1.5B`，不调用火山、OpenSpeech 或其他远程 TTS API。
 
-## 环境变量
+## Core Rules
 
-所有环境变量统一使用 `NICK_SKILLS_ENV_` 前缀，避免冲突。
+- 本 skill 只做本地 TTS。不要上传文本或声音参考到远程 TTS 服务。
+- 首选 `scripts/tts.py`。它会自动调用 `scripts/ensure_vibevoice.sh`，缺本地部署时先部署。
+- 默认输出 wav；需要 mp3 时用 `--format mp3` 或输出 `.mp3`，脚本会用 ffmpeg 转码。
+- 同一条视频或同一批旁白必须固定 speaker、seed、cfg scale 和 voice reference。
+- 声音克隆只在用户提供授权本地 `.wav` 参考音频时使用。
 
-- `NICK_SKILLS_ENV_VOICE_TTS_API_KEY` — 火山引擎语音技术 API Key（必填）
-- `NICK_SKILLS_ENV_VOICE_TTS_VOICE_TYPE` — 默认音色 ID（可选，默认 `BV001_V2`）
-- `NICK_SKILLS_ENV_VOICE_TTS_CLUSTER` — 集群名称（可选，默认 `volcano_icl`）
+详细 VibeVoice 接入见 [VibeVoice integration](references/vibevoice-integration.md)。
 
-## 使用方法
+## Environment
 
-```bash
-python3 scripts/tts.py "要合成的文本" \
-  --voice YOUR_VOICE_ID \
-  --output output.mp3 \
-  --speed 1.0 \
-  --pitch 1.0 \
-  --emotion happy \
-  --encoding mp3
-```
+常用变量：
 
-### 参数说明
+- `VIBEVOICE_MODEL`：默认 `microsoft/VibeVoice-1.5B`
+- `VIBEVOICE_SPEAKER_ID`：中文默认 `Bowen`，英文默认 `Alice`
+- `VIBEVOICE_SEED`：默认 `1227`
+- `VIBEVOICE_CFG_SCALE`：默认 `1.3`
+- `VIBEVOICE_LANGUAGE`：默认 `zh`
+- `VIBEVOICE_VOICE_REF`：授权声音参考 `.wav`
+- `VIBEVOICE_DEPLOY_DIR`：默认 `$HOME/.cache/nick-skills/vibevoice`
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `text`（必填） | 要合成的文本 | — |
-| `--voice, -v` | 音色 ID | 环境变量或 `BV001_V2` |
-| `--output, -o` | 输出文件路径 | `tts_output.mp3` |
-| `--speed, -s` | 语速（0.5~2.0） | `1.0` |
-| `--pitch, -p` | 语调（0.5~2.0），>1 偏高 <1 偏低 | `1.0` |
-| `--emotion` | 情感标签 | 无 |
-| `--encoding, -e` | 音频格式（mp3/wav/ogg_opus） | `mp3` |
-| `--cluster, -c` | 集群名称 | 环境变量或 `volcano_icl` |
-
-## 语气与情感控制
-
-### 方式一：emotion 参数（推荐）
-
-直接指定情感标签，API 原生支持：
-
-| 标签 | 情感 |
-|------|------|
-| `happy` | 开心、愉快 |
-| `sad` | 悲伤、低落 |
-| `angry` | 生气、愤怒 |
-| `scare` | 恐惧、害怕 |
-| `hate` | 厌恶 |
-| `surprise` | 惊讶 |
-| `neutral` | 中性、平静 |
+部署后会写入：
 
 ```bash
-python3 scripts/tts.py "太棒了，我好开心！" --emotion happy
-python3 scripts/tts.py "这件事让我很难过。" --emotion sad --pitch 0.9 --speed 0.8
+$HOME/.cache/nick-skills/vibevoice/env.sh
 ```
 
-### 方式二：pitch + speed 组合
-
-通过调节语调和语速模拟不同语气：
-
-| 效果 | speed | pitch |
-|------|-------|-------|
-| 兴奋 | 1.2 | 1.2 |
-| 低沉沉稳 | 0.8 | 0.8 |
-| 温柔轻声 | 0.9 | 1.1 |
-| 急促紧张 | 1.4 | 1.1 |
-| 庄重播报 | 0.85 | 0.95 |
-
-> **注意**：`volcano_icl` 集群不支持 SSML 的 `<emotion>` 和 `<prosody>` 标签（会被当作文字朗读）。请使用上述两种方式控制语气。
-
-## 常用音色
-
-### 复刻音色
-
-在火山引擎控制台创建的声音复刻音色，格式如 `S_xxxxxxxx`。
-
-### 预置音色示例
-
-| 音色 ID | 描述 |
-|---------|------|
-| `BV001_V2` | 通用女声 |
-| `BV002_V2` | 通用男声 |
-
-更多预置音色参见 [火山引擎文档](https://www.volcengine.com/docs/6561/97465)。
-
-## 集群说明
-
-| 集群 | 说明 |
-|------|------|
-| `volcano_icl` | 即时声音克隆，支持复刻音色 |
-| `volcano_tts` | 标准语音合成，仅支持预置音色 |
-| `volcano_mega` | 高级语音合成 |
-
-## 工作流程
-
-1. **接收文本** — 用户提供要朗读的文字
-2. **确定语气** — 根据语境选择 emotion 或 pitch/speed 组合
-3. **调用脚本** — 执行 `scripts/tts.py` 生成音频
-4. **发送音频** — 上传到飞书并发送文件消息
-
-## 示例
+## Usage
 
 ```bash
-# 基础合成
-python3 scripts/tts.py "从前有座山，山上有座庙"
+# 自动确保本地 VibeVoice 可用，并生成 wav
+python3 skills/voice-tts/scripts/tts.py "要合成的文本" -o output.wav
 
-# 开心语气
-python3 scripts/tts.py "太好了！我们成功了！" --emotion happy --speed 1.1
+# 从文件读取
+python3 skills/voice-tts/scripts/tts.py -f narration.txt -o output.wav
 
-# 低沉叙述
-python3 scripts/tts.py "那是一个寒冷的冬夜..." --pitch 0.85 --speed 0.85
+# 指定 speaker / seed，保证多段旁白稳定
+python3 skills/voice-tts/scripts/tts.py -f scene.txt -o scene-01.wav \
+  --speaker-id Bowen --seed 1227
 
-# 急促紧张
-python3 scripts/tts.py "快跑！来不及了！" --speed 1.4 --pitch 1.1
+# 使用授权参考音频
+python3 skills/voice-tts/scripts/tts.py "测试" -o cloned.wav \
+  --voice-ref /absolute/path/to/authorized-reference.wav
 
-# 输出 wav 格式
-python3 scripts/tts.py "测试音频" --encoding wav --output test.wav
+# 输出 mp3
+python3 skills/voice-tts/scripts/tts.py "测试" -o output.mp3 --format mp3
 ```
+
+## Scripts
+
+- `scripts/ensure_vibevoice.sh`：部署/复用本地 VibeVoice，缓存 `microsoft/VibeVoice-1.5B`。
+- `scripts/tts.py`：通用本地 TTS 入口。
+- `scripts/vibevoice_tts_adapter.py`：命令适配器，直接调用 VibeVoice community inference。
+- `scripts/check_audio_consistency.py`：检测多段音频是否出现音色或音调异常。
+
+## Voice Director Markers
+
+`voice-director` 可能输出 `[emotion=... speed=... pitch=...]文本[/]` 标记。本地 VibeVoice 当前不使用这些远程 TTS 控制参数，`scripts/tts.py` 默认会去掉标记并保留文本内容。确实要保留原文标记时使用 `--keep-markers`。
+
+## Quality Gate
+
+生成一组旁白后：
+
+```bash
+$VIBEVOICE_VENV/bin/python skills/voice-tts/scripts/check_audio_consistency.py audio
+```
+
+如果某段被标为 outlier，用同一 speaker / seed / cfg scale / voice reference 重新生成该段；不要用随机参数单独补一段。

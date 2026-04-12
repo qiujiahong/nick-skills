@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 语音导演：用 LLM 为台词自动标注情感、语速、语调标记。
-输出格式兼容 voice-tts 的分段模式。
+本地 voice-tts 会默认去掉不支持的标记并保留文本内容。
 """
 
 import argparse

@@ -1,6 +1,6 @@
 ---
 name: teaching-video-maker
-description: 生成有声音的教学视频。Use when the user asks to create an explainer, course clip, tutorial, lecture-style video, product teaching video, or any voiced educational video from a required topic plus optional content, style, and duration requirements. Orchestrates the external remotion skill installed from google-labs-code/stitch-skills and a local configurable microsoft/VibeVoice-1.5B voice model, including voice cloning when the user provides an authorized reference voice.
+description: 生成有声音的教学视频。Use when the user asks to create an explainer, course clip, tutorial, lecture-style video, product teaching video, or any voiced educational video from a required topic plus optional content, style, and duration requirements. Orchestrates Remotion visuals and delegates all local narration synthesis to the voice-tts skill.
 ---
 
 # Teaching Video Maker
@@ -41,33 +41,27 @@ npx skills add https://github.com/google-labs-code/stitch-skills --skill remotio
 
 如果当前会话尚未自动加载新安装的 `remotion` skill，手动找到它的 `SKILL.md` 并按里面的 Remotion 项目创建、预览和渲染步骤执行。
 
-这个 skill 还要求本地可用 `microsoft/VibeVoice-1.5B`。生成旁白前必须先运行：
+这个 skill 不再内置 TTS 部署或远程 TTS 调用。所有语音合成都交给 `voice-tts` skill。生成旁白前，先确保本地 `voice-tts` 可用：
 
 ```bash
-scripts/ensure_vibevoice.sh
+skills/voice-tts/scripts/ensure_vibevoice.sh
+source "$HOME/.cache/nick-skills/vibevoice/env.sh"
 ```
 
-检查顺序：
+如果 skill 已安装到其他目录，找到 `voice-tts/scripts/ensure_vibevoice.sh` 后运行同样的命令。
 
-1. 如果 `VIBEVOICE_ENDPOINT` 指向一个可用本地服务，直接复用。
-2. 如果 `VIBEVOICE_TTS_CMD` 已配置，直接复用该命令。
-3. 如果两者都没有，先在本机部署 VibeVoice 命令适配器：下载/复用 TTS 实现源码、创建 Python venv、安装依赖，并缓存 `microsoft/VibeVoice-1.5B` 权重。
-4. 部署脚本会写入 `$HOME/.cache/nick-skills/vibevoice/env.sh`。在当前 shell 中 `source` 它之后再生成音频。
-5. 托管部署默认写入固定 `VIBEVOICE_SPEAKER_ID=Bowen` 和 `VIBEVOICE_SEED=1227`，避免分 scene 生成时出现音色、音高或说话状态漂移。
-
-注意：Microsoft 官方 VibeVoice 仓库在 2025-09-05 后恢复为不含 TTS 代码的说明仓库。自动部署默认使用社区保留的 VibeVoice TTS 实现加载 Microsoft 权重；如用户已有内部部署，可通过 `VIBEVOICE_ENDPOINT` 或 `VIBEVOICE_TTS_CMD` 覆盖，不要重复部署。
+`voice-tts` 默认使用本地 `microsoft/VibeVoice-1.5B`，不会调用火山、OpenSpeech 或其他远程 TTS API。
 
 ## Voice Engine
 
-默认使用本地部署的 VibeVoice：
+本 skill 只负责编排教学视频，不维护语音引擎实现。语音规则：
 
-- 默认模型：`microsoft/VibeVoice-1.5B`
-- 默认要求：本地推理，不使用云 TTS，除非用户明确允许
-- 默认锁定 speaker 和 seed：中文 `Bowen` + `1227`；更换音色时也要为整条视频使用同一个 speaker / seed
-- 支持配置不同模型、端点、命令、音色和克隆声音参考音频
-- 声音克隆只在用户提供授权参考音频时使用；不要克隆公众人物、第三方或不明来源声音
+- 调用 `voice-tts/scripts/tts.py` 逐 scene 生成音频。
+- 默认模型、speaker、seed、授权声音参考等配置由 `voice-tts` 管理。
+- 同一条视频必须使用同一个 speaker、seed、cfg scale 和 voice reference。
+- 不要在 `teaching-video-maker` 里新增 TTS API 客户端或远程 TTS fallback。
 
-配置和接入细节见 [VibeVoice integration](references/vibevoice-integration.md)。
+语音细节见 `voice-tts` skill 的 `SKILL.md` 和 `references/vibevoice-integration.md`。
 
 ## Output Directory
 
@@ -101,9 +95,9 @@ teaching-video/YYYYMMDD/<topic-slug>/output/<topic-slug>-summary.md
 3. **Design the lesson**：写 `outline.md`，用“问题 -> 核心概念 -> 例子 -> 操作/判断 -> 总结”组织。
 4. **Write narration first**：写 `narration.md`。旁白决定时间线，画面必须服务旁白。
 5. **Split into scenes**：写 `storyboard.md`，每个 scene 包含旁白片段、画面内容、动效、屏幕文字和预估时长。
-6. **Ensure local VibeVoice**：如果本地没有可用的 `microsoft/VibeVoice-1.5B` endpoint 或命令，先运行 `scripts/ensure_vibevoice.sh` 完成本地部署，并 `source` 它输出的 `env.sh`。
-7. **Generate voice**：用本地 VibeVoice 为每个 scene 生成音频，保存到 `audio/scene-XX.wav` 或 `audio/scene-XX.mp3`。同一条视频必须使用同一个 `VIBEVOICE_SPEAKER_ID`、`VIBEVOICE_SEED`、`VIBEVOICE_CFG_SCALE` 和 voice reference。
-8. **Check voice consistency**：运行 `scripts/check_audio_consistency.py audio`，并快速试听每个 scene 的开头。若某段音色或音调明显不同，保留同一 speaker / seed 重新生成该 scene，或重新生成全套音频。
+6. **Ensure local voice-tts**：运行 `voice-tts/scripts/ensure_vibevoice.sh`，并 `source "$HOME/.cache/nick-skills/vibevoice/env.sh"`。
+7. **Generate voice**：用 `voice-tts/scripts/tts.py` 为每个 scene 生成音频，保存到 `audio/scene-XX.wav`。同一条视频必须使用同一个 `VIBEVOICE_SPEAKER_ID`、`VIBEVOICE_SEED`、`VIBEVOICE_CFG_SCALE` 和 voice reference。
+8. **Check voice consistency**：运行 `voice-tts/scripts/check_audio_consistency.py audio`，并快速试听每个 scene 的开头。若某段音色或音调明显不同，保留同一 speaker / seed 重新生成该 scene，或重新生成全套音频。
 9. **Measure audio**：用 `ffprobe` 读取每段真实时长，生成 `timing.json`。不要只依赖估算时长。
 10. **Build Remotion video**：调用 `remotion` skill 创建或更新 `remotion/` 项目，按 `timing.json` 编排画面和 `<Audio>`。
 11. **Preview and fix sync**：用 Remotion preview 或 render 检查音画对应。旁白提到的概念，应在 0.5 秒内出现在画面上。
@@ -114,7 +108,7 @@ teaching-video/YYYYMMDD/<topic-slug>/output/<topic-slug>-summary.md
 
 - 默认 3 分钟，目标总时长 170 到 190 秒。
 - 中文旁白初稿按每分钟约 240 到 280 个汉字估算；英文按每分钟约 130 到 160 个词估算。
-- 真正时间线以 VibeVoice 生成后的音频时长为准。
+- 真正时间线以 `voice-tts` 生成后的音频时长为准。
 - 如果音频总时长偏离目标超过 10%，先改旁白，再重新生成音频，不要只拉伸视频。
 - 教学视频宁可少讲一个点，也不要把语速压得不自然。
 
@@ -167,11 +161,11 @@ output/<topic-slug>-summary.md
 完成前检查：
 
 - 已运行或确认安装 `remotion` skill。
-- 已运行 `scripts/ensure_vibevoice.sh`，或确认 `VIBEVOICE_ENDPOINT` / `VIBEVOICE_TTS_CMD` 指向可用的本地 `microsoft/VibeVoice-1.5B` 部署。
+- 已运行 `voice-tts/scripts/ensure_vibevoice.sh`，并确认本地 `microsoft/VibeVoice-1.5B` 可用。
 - 同一条视频的所有 scene 使用同一个 speaker、seed、cfg scale 和 voice reference；不要让异常 scene 用随机 seed 单独生成。
 - `brief.md`、`outline.md`、`narration.md`、`storyboard.md`、`timing.json` 存在。
 - 每个 scene 都有对应音频文件。
-- 已运行 `scripts/check_audio_consistency.py audio`，且已试听确认没有明显音色或音调跳变。
+- 已运行 `voice-tts/scripts/check_audio_consistency.py audio`，且已试听确认没有明显音色或音调跳变。
 - `timing.json` 的总时长接近用户要求。
 - 视频画面根据真实音频时长编排，而不是只按估算时长。
 - 旁白里的关键概念都在相邻画面出现。
@@ -186,5 +180,5 @@ output/<topic-slug>-summary.md
 - 视频号总结文件路径
 - 实际总时长
 - 使用的风格
-- 使用的 VibeVoice 配置摘要，例如模型、端点或命令、是否使用克隆声音
+- 使用的 `voice-tts` 配置摘要，例如模型、speaker、seed、是否使用授权声音参考
 - 如未能生成最终 mp4，明确说明卡在哪一步，并保留已生成的脚本、音频或 Remotion 项目路径

@@ -19,7 +19,7 @@ Inside `teaching-video/YYYYMMDD/<topic-slug>/`:
 - `narration.md`：scene-by-scene voiceover text
 - `storyboard.md`：scene visuals and animation notes
 - `timing.json`：machine-readable timing contract
-- `audio/scene-XX.wav`：VibeVoice output
+- `audio/scene-XX.wav`：local `voice-tts` output
 - `remotion/`：Remotion project
 - `remotion/public/audio/scene-XX.wav`：copy of scene audio for Remotion `staticFile()`
 - `output/<topic-slug>.mp4`：final voiced video

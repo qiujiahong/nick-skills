@@ -30,9 +30,9 @@ dist/
 |-------|------|
 | [image-gen](skills/image-gen/) | AI 图像生成与编辑，支持文生图、图+文生图、风格转换，多比例与标准 / 2K / 4K 分辨率 |
 | [video-gen](skills/video-gen/) | AI 视频生成与编辑，基于火山引擎 Doubao Seedance，支持文生视频、图生视频、有声视频 |
-| [teaching-video-maker](skills/teaching-video-maker/) | 生成有声音的教学视频；调用 `remotion` skill 编排画面，并使用本地 `microsoft/VibeVoice-1.5B` 或可配置 VibeVoice 服务生成拟人旁白，支持授权声音克隆 |
-| [voice-tts](skills/voice-tts/) | 火山引擎语音合成，支持声音复刻音色、语速 / 语调 / 情感控制 |
-| [voice-director](skills/voice-director/) | 用 LLM 为台词自动标注情感、语速、语调，再交给 `voice-tts` 合成 |
+| [teaching-video-maker](skills/teaching-video-maker/) | 生成有声音的教学视频；调用 `remotion` skill 编排画面，并把旁白合成交给本地 `voice-tts` |
+| [voice-tts](skills/voice-tts/) | 本地语音合成，基于 `microsoft/VibeVoice-1.5B`，不调用远程 TTS API，支持授权本地声音参考 |
+| [voice-director](skills/voice-director/) | 用 LLM 为台词自动标注情感、语速、语调；`voice-tts` 会在本地合成时去掉不支持的标记 |
 | [ai-topic-research](skills/ai-topic-research/) | 面向 AI 技术主题与技术社区热点的联网研究；既能研究单个主题，也能从社区热点里只推荐 1 个适合写博客的主题 |
 | [tavily-search](skills/tavily-search/) | Tavily 联网搜索封装，供研究类 skill 收集资料 |
 | [tech-blog-writer](skills/tech-blog-writer/) | 技术博客写作中枢；根据“已选主题 + 素材资料 + 写作建议”在 `tech-blog-writer/YYYYMMDD/` 下生成博客文件夹，包含 `blog.md`、`image-requirements.md` 和 `assets/` |
@@ -113,22 +113,21 @@ export VIDEO_GEN_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
 npx skills add https://github.com/google-labs-code/stitch-skills --skill remotion
 ```
 
-默认使用本地 VibeVoice：
+教学视频旁白由本地 `voice-tts` 生成：
 
 ```bash
-export TEACHING_VIDEO_TTS_ENGINE="vibevoice"
+export VOICE_TTS_ENGINE="vibevoice"
 export VIBEVOICE_MODEL="microsoft/VibeVoice-1.5B"
-export VIBEVOICE_ENDPOINT="http://127.0.0.1:7860"
 export VIBEVOICE_SPEAKER_ID="Bowen"
 export VIBEVOICE_SEED="1227"
 # 可选：授权声音克隆参考音频
 export VIBEVOICE_VOICE_REF="/absolute/path/to/authorized-reference.wav"
 ```
 
-如果本地没有可用的 VibeVoice endpoint 或命令，先运行：
+如果本地没有可用的 VibeVoice，先运行：
 
 ```bash
-skills/teaching-video-maker/scripts/ensure_vibevoice.sh
+skills/voice-tts/scripts/ensure_vibevoice.sh
 source "$HOME/.cache/nick-skills/vibevoice/env.sh"
 ```
 
@@ -141,9 +140,12 @@ teaching-video/YYYYMMDD/<topic-slug>/output/<topic-slug>-summary.md
 ### voice-tts
 
 ```bash
-export NICK_SKILLS_ENV_VOICE_TTS_API_KEY="your-api-key"
-export NICK_SKILLS_ENV_VOICE_TTS_VOICE_TYPE="S_xxxxxxxx"
-export NICK_SKILLS_ENV_VOICE_TTS_CLUSTER="volcano_icl"
+export VOICE_TTS_ENGINE="vibevoice"
+export VIBEVOICE_MODEL="microsoft/VibeVoice-1.5B"
+export VIBEVOICE_SPEAKER_ID="Bowen"
+export VIBEVOICE_SEED="1227"
+skills/voice-tts/scripts/ensure_vibevoice.sh
+source "$HOME/.cache/nick-skills/vibevoice/env.sh"
 ```
 
 ### voice-director
@@ -172,8 +174,8 @@ export WECHAT_MP_APP_SECRET="your-app-secret"
 
 - 图像生成直接看 [image-gen](skills/image-gen/)。
 - 视频生成直接看 [video-gen](skills/video-gen/)。
-- 需要根据主题生成有声音的教学视频时，使用 [teaching-video-maker](skills/teaching-video-maker/)；输入“视频主题”必填，“内容要求 / 风格要求 / 时间要求”可选，默认 3 分钟、简洁科技风、本地 VibeVoice 旁白。
-- 需要更有表现力的配音时，先用 [voice-director](skills/voice-director/) 标注，再用 [voice-tts](skills/voice-tts/) 合成。
+- 需要根据主题生成有声音的教学视频时，使用 [teaching-video-maker](skills/teaching-video-maker/)；输入“视频主题”必填，“内容要求 / 风格要求 / 时间要求”可选，默认 3 分钟、简洁科技风，并通过本地 [voice-tts](skills/voice-tts/) 生成旁白。
+- 需要普通文字转语音或教学旁白时，直接使用 [voice-tts](skills/voice-tts/)，默认本地 VibeVoice，不走远程 TTS。
 - 需要围绕 `MCP`、`RAG`、`AI Coding Agent`、`Responses API` 这类主题快速做第一轮资料研究时，使用 [ai-topic-research](skills/ai-topic-research/)。
 - 需要完整生产技术博客时，按 `ai-topic-research -> 补素材 -> tech-blog-writer -> image-gen -> wechat-mp-publisher` 的顺序执行。
 - 需要把“选题 + 素材资料 + 写作建议”整理成博客文件夹，并输出正文与配图要求时，使用 [tech-blog-writer](skills/tech-blog-writer/)，默认产物放在 `tech-blog-writer/YYYYMMDD/`。
