@@ -1,14 +1,7 @@
-选择主题：RAG、长上下文与记忆
 
-支撑链接：
+## 
 
-https://thenewstack.io/how-to-build-production-ready-ai-agents-with-rag-and-fastapi/
-写作建议：
-
-标题不要只写“RAG、长上下文与记忆是什么”，更适合写成“为什么现在大家开始重新讨论 RAG、长上下文与记忆”。
-正文前半段先讲读者最关心的实际收益，比如效率、成本、可靠性或工作流变化，再讲技术细节。
-正文里至少放 2 个具体链接或案例，并在结尾给出“现在值不值得跟进、适合谁先试”的判断，这类收束更容易获得收藏和转发。
-
-
-
-写一个SKILL ： 根据选择主题、写作建议 写一篇技术博客，需要在合适的地方，预留配图，配图先用占位符，比如[配图1](./assets/配图1.png)
+- [X] ~~*修改skill teaching-video-maker如果本地没有部署microsoft/VibeVoice-1.5B，则部先部署。*~~ [2026-04-12]
+- [X] ~~*使用skill teaching-video-maker  制作一个  Hermes Agent的入门视频*~~ [2026-04-12]
+* [X] ~~*做一个skill 参考teaching-video-maker skil，这个skill 做ch(countryhuman)风格的视频并配音，*~~ [2026-04-12]
+* [X] ~~*调用这个skill，用沙特买东风导弹的的故事做一个三人对话视频 有兔子、骆驼、鹰酱 3分钟 3个任务对话。*~~ [2026-04-12]
