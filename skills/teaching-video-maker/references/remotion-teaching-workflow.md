@@ -86,16 +86,14 @@ The output must include both `video` and `audio` streams.
 
 ## Publish Summary
 
-After rendering, write `output/<topic-slug>-summary.md` next to the mp4. The file should be copy that the user can paste into 视频号:
+After rendering, write `output/<topic-slug>-summary.md` next to the mp4. The file should be short copy that the user can paste into 朋友圈 or 视频号:
 
-- title
-- one-sentence summary
-- 120 to 220 character body
-- 3 to 5 key takeaways
-- 3 to 6 hashtags
-- one pinned-comment candidate
+- title: 16 Chinese characters or fewer
+- publish copy: 60 to 120 Chinese characters, at most 2 short paragraphs
+- hashtags: 0 to 3
+- optional backup line: 40 Chinese characters or fewer
 
-Keep it aligned with the narration and avoid production notes.
+Keep it aligned with the narration. Avoid production notes, long bullet lists, pinned-comment prompts, or full summaries unless the user asks for a long version.
 
 ## Reference
 

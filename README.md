@@ -132,7 +132,7 @@ skills/teaching-video-maker/scripts/ensure_vibevoice.sh
 source "$HOME/.cache/nick-skills/vibevoice/env.sh"
 ```
 
-最终视频输出目录会同时包含可直接发视频号的总结文案：
+最终视频输出目录会同时包含可直接发朋友圈 / 视频号的短文案：
 
 ```text
 teaching-video/YYYYMMDD/<topic-slug>/output/<topic-slug>-summary.md
