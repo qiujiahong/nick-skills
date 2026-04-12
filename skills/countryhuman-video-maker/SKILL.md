@@ -42,8 +42,8 @@ countryhuman-video/YYYYMMDD/<topic-slug>/
 
 1. **Clarify the premise**：确认主题、角色、时长、语言和敏感边界。
 2. **Verify the spine**：真实事件至少核实年份、主体、冲突点和后果。把链接或资料摘要写进 `sources.md`。
-3. **Write the 3-task arc**：用“需求 -> 交易/行动 -> 后果/复盘”或用户指定结构拆成 3 幕。
-4. **Write dialogue first**：每句只让一个角色说话；角色观点要清楚但避免现实人群标签化。
+3. **Write the 3-act arc**：用“需求 -> 交易/行动 -> 后果/复盘”或用户指定结构拆成 3 幕。`tasks` 只是内部时间线，不要让角色说“任务一/任务二/任务三”。
+4. **Write dialogue first**：每句只让一个角色说话；对白要像三个人推进故事，避免旁白腔和流程汇报腔。
 5. **Create `dialogue.json`**：按下面 schema 写入角色、任务、台词、计划时长和发布文案。
 6. **Render locally**：运行 `scripts/render_countryhuman_dialogue.py` 生成配音、画面、时间线和 mp4。
 7. **Quality gate**：检查总时长、音轨、画面、字幕和事实表述。
@@ -64,12 +64,12 @@ countryhuman-video/YYYYMMDD/<topic-slug>/
     {"id": "eagle", "name": "鹰酱", "role": "美国", "voice": "Xinran"}
   ],
   "tasks": [
-    {"id": "task-1", "title": "任务一：提出需求", "objective": "解释为什么要找远程威慑"},
-    {"id": "task-2", "title": "任务二：完成交易", "objective": "解释秘密采购与外界曝光"},
-    {"id": "task-3", "title": "任务三：复盘影响", "objective": "解释地区平衡和后续影响"}
+    {"id": "act-1", "title": "第一幕：压力上桌", "objective": "解释为什么要找远程威慑"},
+    {"id": "act-2", "title": "第二幕：绕路成交", "objective": "解释秘密采购与外界曝光"},
+    {"id": "act-3", "title": "第三幕：余波回响", "objective": "解释地区平衡和后续影响"}
   ],
   "dialogue": [
-    {"task": "task-1", "speaker": "camel", "text": "台词", "spokenText": "用于配音的中文读法", "durationSec": 9.0}
+    {"task": "act-1", "speaker": "camel", "text": "台词", "spokenText": "用于配音的中文读法", "durationSec": 9.0}
   ],
   "summary": {
     "title": "16字以内标题",
@@ -125,9 +125,10 @@ python3 skills/countryhuman-video-maker/scripts/render_countryhuman_dialogue.py 
 ## Style Rules
 
 - CH 是拟人化叙事外壳，不是现实群体评价。让角色代表国家/机构立场，避免攻击民族、宗教或普通民众。
-- 兔子、骆驼、鹰酱等网络代称可以使用，但画面和台词要保持讽刺克制。
+- 兔子、骆驼、鹰酱等网络代称可以使用，但画面和台词要保持讽刺克制；角色外观用 CH 人形画风：白发、旗帜脸、服装剪影、墨镜/围巾等身份元素，不要默认画成 countryball 圆头动物。
 - 屏幕文字只放任务名、关键事实和当前台词，不要把资料全文塞进画面。
 - 任务标题、任务目标、关键事实、字幕、发布文案默认全部写中文；英文型号可在字幕保留，但 `spokenText` 要改成中文读法。
+- 对白里不要出现“任务一、任务二、任务三”。如果需要结构感，只在屏幕小标题里写“第一幕、第二幕、第三幕”。
 - 每 6 到 12 秒换一张画面；每幕至少让 2 个角色发言。
 - 事实表达用“据公开资料”“外界报道”“后来公开展示”等措辞，避免把未证实细节说成定论。
 

@@ -159,14 +159,14 @@ def normalize_tasks(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     tasks = {}
     for index, raw in enumerate(data.get("tasks", []), start=1):
         task = dict(raw)
-        task_id = task.get("id") or f"task-{index}"
+        task_id = task.get("id") or f"act-{index}"
         task["id"] = task_id
-        task.setdefault("title", f"任务{index}")
+        task.setdefault("title", f"第{index}幕")
         task.setdefault("objective", "")
         task.setdefault("fact", "")
         tasks[task_id] = task
     if not tasks:
-        tasks["task-1"] = {"id": "task-1", "title": "任务一", "objective": "", "fact": ""}
+        tasks["act-1"] = {"id": "act-1", "title": "第一幕", "objective": "", "fact": ""}
     return tasks
 
 
@@ -264,17 +264,11 @@ def character_svg(char: dict[str, Any], x: int, y: int, active: bool) -> str:
     glow = ""
     if active:
         glow = (
-            f'<circle cx="{x}" cy="{y}" r="166" fill="{color}" opacity="0.13"/>'
-            f'<circle cx="{x}" cy="{y}" r="148" fill="none" stroke="{color}" stroke-width="10" opacity="0.85"/>'
+            f'<ellipse cx="{x}" cy="{y+20}" rx="148" ry="178" fill="{color}" opacity="0.13"/>'
+            f'<ellipse cx="{x}" cy="{y+20}" rx="132" ry="162" fill="none" stroke="{color}" stroke-width="9" opacity="0.85"/>'
         )
 
-    body = (
-        f'<g opacity="{opacity}">'
-        f'<path d="M{x-110},{y+130} C{x-150},{y+230} {x+150},{y+230} {x+110},{y+130} '
-        f'C{x+70},{y+95} {x-70},{y+95} {x-110},{y+130}Z" fill="{color}" opacity="0.88"/>'
-        f'<path d="M{x-86},{y+135} C{x-116},{y+198} {x+116},{y+198} {x+86},{y+135}" fill="#f8fafc" opacity="0.25"/>'
-        "</g>"
-    )
+    body = ch_body_svg(char_id, x, y, color, opacity)
 
     if char_id == "rabbit":
         head = rabbit_head(x, y, opacity)
@@ -287,51 +281,90 @@ def character_svg(char: dict[str, Any], x: int, y: int, active: bool) -> str:
 
     name = escape(f"{char.get('name', char_id)} / {char.get('role', '')}".strip(" /"))
     label = (
-        f'<rect x="{x-130}" y="{y+236}" width="260" height="52" rx="8" fill="#111827" opacity="{0.92 if active else 0.45}"/>'
-        f'<text x="{x}" y="{y+270}" text-anchor="middle" font-size="28" fill="#ffffff" font-weight="700" '
+        f'<rect x="{x-134}" y="{y+238}" width="268" height="52" rx="8" fill="#111827" opacity="{0.92 if active else 0.45}"/>'
+        f'<text x="{x}" y="{y+272}" text-anchor="middle" font-size="28" fill="#ffffff" font-weight="700" '
         'font-family="PingFang SC, Hiragino Sans GB, STHeiti, Arial Unicode MS, sans-serif">'
         f"{name}</text>"
     )
     return f"{body}{glow}{head}{label}"
 
 
+def ch_body_svg(char_id: str, x: int, y: int, color: str, opacity: float) -> str:
+    jacket = {"rabbit": "#1f2937", "camel": "#f8fafc", "eagle": "#111827"}.get(char_id, "#1f2937")
+    shirt = {"rabbit": "#d9242e", "camel": "#198754", "eagle": "#f8fafc"}.get(char_id, color)
+    tie = {"rabbit": "#f8fafc", "camel": "#d8b45b", "eagle": "#c91f37"}.get(char_id, "#f8fafc")
+    scarf = ""
+    if char_id == "camel":
+        scarf = (
+            f'<path d="M{x-70},{y+122} C{x-22},{y+154} {x+22},{y+154} {x+70},{y+122} '
+            f'L{x+48},{y+186} C{x+18},{y+174} {x-18},{y+174} {x-48},{y+186}Z" fill="#d8b45b" opacity="0.96"/>'
+        )
+    return f"""
+    <g opacity="{opacity}">
+      <path d="M{x-46},{y+86} C{x-32},{y+118} {x+32},{y+118} {x+46},{y+86} L{x+54},{y+146} C{x+20},{y+168} {x-20},{y+168} {x-54},{y+146}Z" fill="#e5e7eb"/>
+      <path d="M{x-142},{y+138} C{x-180},{y+218} {x+180},{y+218} {x+142},{y+138} C{x+88},{y+104} {x-88},{y+104} {x-142},{y+138}Z" fill="{jacket}"/>
+      <path d="M{x-64},{y+132} L{x},{y+218} L{x+64},{y+132} C{x+28},{y+150} {x-28},{y+150} {x-64},{y+132}Z" fill="{shirt}" opacity="0.95"/>
+      <path d="M{x-20},{y+136} L{x},{y+168} L{x+20},{y+136} L{x+10},{y+206} L{x-10},{y+206}Z" fill="{tie}" opacity="0.95"/>
+      <path d="M{x-138},{y+160} C{x-92},{y+142} {x-62},{y+138} {x-28},{y+156}" fill="none" stroke="#ffffff" stroke-width="8" opacity="0.18"/>
+      <path d="M{x+138},{y+160} C{x+92},{y+142} {x+62},{y+138} {x+28},{y+156}" fill="none" stroke="#ffffff" stroke-width="8" opacity="0.18"/>
+      {scarf}
+    </g>
+    """
+
+
+def face_path(x: int, y: int) -> str:
+    return (
+        f"M{x-96},{y-76} C{x-64},{y-118} {x+64},{y-118} {x+96},{y-76} "
+        f"L{x+92},{y+62} C{x+54},{y+106} {x-54},{y+106} {x-92},{y+62}Z"
+    )
+
+
+def hair_svg(x: int, y: int, opacity: float, accent: str = "#f8fafc") -> str:
+    return f"""
+    <g opacity="{opacity}">
+      <path d="M{x-112},{y-58} C{x-108},{y-142} {x-38},{y-184} {x+34},{y-166} C{x+94},{y-150} {x+124},{y-96} {x+112},{y-34} L{x+86},{y-88} L{x+58},{y-24} L{x+24},{y-98} L{x-8},{y-18} L{x-46},{y-96} L{x-72},{y-20}Z" fill="{accent}" stroke="#111827" stroke-width="5"/>
+      <path d="M{x-118},{y-30} C{x-154},{y+20} {x-132},{y+96} {x-82},{y+128}" fill="none" stroke="{accent}" stroke-width="28" stroke-linecap="round"/>
+      <path d="M{x+118},{y-30} C{x+154},{y+22} {x+128},{y+94} {x+84},{y+126}" fill="none" stroke="{accent}" stroke-width="28" stroke-linecap="round"/>
+      <path d="M{x-50},{y-144} L{x-22},{y-52} L{x+8},{y-136} L{x+42},{y-56}" fill="none" stroke="#dbeafe" stroke-width="8" opacity="0.56"/>
+    </g>
+    """
+
+
 def rabbit_head(x: int, y: int, opacity: float) -> str:
     clip = f"rabbitClip{x}"
     return f"""
-    <defs><clipPath id="{clip}"><circle cx="{x}" cy="{y}" r="118"/></clipPath></defs>
-    <ellipse cx="{x-62}" cy="{y-144}" rx="40" ry="112" fill="#f8fafc" stroke="#d9242e" stroke-width="10" opacity="{opacity}"/>
-    <ellipse cx="{x+62}" cy="{y-144}" rx="40" ry="112" fill="#f8fafc" stroke="#d9242e" stroke-width="10" opacity="{opacity}"/>
+    {hair_svg(x, y, opacity)}
+    <defs><clipPath id="{clip}"><path d="{face_path(x, y)}"/></clipPath></defs>
     <g clip-path="url(#{clip})" opacity="{opacity}">
-      <circle cx="{x}" cy="{y}" r="118" fill="#d9242e"/>
+      <rect x="{x-104}" y="{y-116}" width="208" height="222" fill="#d9242e"/>
       <polygon points="{star_points(x-48, y-42, 32, 13)}" fill="#ffd23f"/>
       <polygon points="{star_points(x+4, y-76, 12, 5)}" fill="#ffd23f"/>
       <polygon points="{star_points(x+34, y-42, 12, 5)}" fill="#ffd23f"/>
       <polygon points="{star_points(x+34, y+8, 12, 5)}" fill="#ffd23f"/>
       <polygon points="{star_points(x+4, y+42, 12, 5)}" fill="#ffd23f"/>
     </g>
-    <circle cx="{x}" cy="{y}" r="118" fill="none" stroke="#111827" stroke-width="7" opacity="{opacity}"/>
-    <circle cx="{x-42}" cy="{y+12}" r="13" fill="#ffffff" opacity="{opacity}"/>
-    <circle cx="{x+42}" cy="{y+12}" r="13" fill="#ffffff" opacity="{opacity}"/>
-    <path d="M{x-38},{y+58} Q{x},{y+82} {x+38},{y+58}" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" opacity="{opacity}"/>
+    <path d="{face_path(x, y)}" fill="none" stroke="#111827" stroke-width="6" opacity="{opacity}"/>
+    <path d="M{x-42},{y+12} L{x-12},{y+12}" stroke="#111827" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
+    <path d="M{x+16},{y+12} L{x+46},{y+12}" stroke="#111827" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
+    <path d="M{x-34},{y+58} Q{x},{y+72} {x+34},{y+58}" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
     """
 
 
 def camel_head(x: int, y: int, opacity: float) -> str:
     clip = f"camelClip{x}"
     return f"""
-    <defs><clipPath id="{clip}"><circle cx="{x}" cy="{y}" r="118"/></clipPath></defs>
-    <ellipse cx="{x-108}" cy="{y-30}" rx="38" ry="62" fill="#d8b45b" stroke="#111827" stroke-width="6" opacity="{opacity}"/>
-    <ellipse cx="{x+108}" cy="{y-30}" rx="38" ry="62" fill="#d8b45b" stroke="#111827" stroke-width="6" opacity="{opacity}"/>
-    <path d="M{x-88},{y+132} C{x-46},{y+90} {x+46},{y+90} {x+88},{y+132}" fill="#d8b45b" opacity="{opacity}"/>
+    {hair_svg(x, y, opacity, "#f4f4f5")}
+    <path d="M{x-104},{y-94} C{x-42},{y-142} {x+42},{y-142} {x+104},{y-94}" fill="none" stroke="#d8b45b" stroke-width="24" stroke-linecap="round" opacity="{opacity}"/>
+    <defs><clipPath id="{clip}"><path d="{face_path(x, y)}"/></clipPath></defs>
     <g clip-path="url(#{clip})" opacity="{opacity}">
-      <circle cx="{x}" cy="{y}" r="118" fill="#198754"/>
+      <rect x="{x-104}" y="{y-116}" width="208" height="222" fill="#198754"/>
       <path d="M{x-64},{y-46} C{x-24},{y-70} {x+24},{y-70} {x+64},{y-46}" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
       <path d="M{x-62},{y+48} L{x+76},{y+20}" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
       <path d="M{x+76},{y+20} L{x+48},{y+42}" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
     </g>
-    <circle cx="{x}" cy="{y}" r="118" fill="none" stroke="#111827" stroke-width="7" opacity="{opacity}"/>
-    <circle cx="{x-38}" cy="{y+4}" r="13" fill="#ffffff" opacity="{opacity}"/>
-    <circle cx="{x+38}" cy="{y+4}" r="13" fill="#ffffff" opacity="{opacity}"/>
+    <path d="{face_path(x, y)}" fill="none" stroke="#111827" stroke-width="6" opacity="{opacity}"/>
+    <circle cx="{x-34}" cy="{y+4}" r="11" fill="#ffffff" opacity="{opacity}"/>
+    <circle cx="{x+34}" cy="{y+4}" r="11" fill="#ffffff" opacity="{opacity}"/>
     <path d="M{x-36},{y+58} Q{x},{y+72} {x+36},{y+58}" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
     """
 
@@ -341,30 +374,31 @@ def eagle_head(x: int, y: int, opacity: float) -> str:
     stripes = []
     for index in range(8):
         color = "#c91f37" if index % 2 == 0 else "#ffffff"
-        stripes.append(f'<rect x="{x-118}" y="{y-118 + index * 30}" width="236" height="30" fill="{color}"/>')
+        stripes.append(f'<rect x="{x-104}" y="{y-116 + index * 28}" width="208" height="28" fill="{color}"/>')
     stars = []
     for row in range(3):
         for col in range(4):
-            stars.append(f'<circle cx="{x-85 + col * 28}" cy="{y-82 + row * 28}" r="5" fill="#ffffff"/>')
+            stars.append(f'<circle cx="{x-74 + col * 24}" cy="{y-84 + row * 24}" r="4.5" fill="#ffffff"/>')
     return f"""
-    <defs><clipPath id="{clip}"><circle cx="{x}" cy="{y}" r="118"/></clipPath></defs>
+    {hair_svg(x, y, opacity)}
+    <defs><clipPath id="{clip}"><path d="{face_path(x, y)}"/></clipPath></defs>
     <g clip-path="url(#{clip})" opacity="{opacity}">
       {''.join(stripes)}
-      <rect x="{x-118}" y="{y-118}" width="118" height="100" fill="#23408e"/>
+      <rect x="{x-104}" y="{y-116}" width="104" height="92" fill="#23408e"/>
       {''.join(stars)}
     </g>
-    <circle cx="{x}" cy="{y}" r="118" fill="none" stroke="#111827" stroke-width="7" opacity="{opacity}"/>
-    <polygon points="{x+114},{y+4} {x+184},{y+32} {x+114},{y+60}" fill="#f4b63f" stroke="#111827" stroke-width="6" opacity="{opacity}"/>
-    <rect x="{x-76}" y="{y-16}" width="62" height="36" rx="8" fill="#111827" opacity="{opacity}"/>
-    <rect x="{x+14}" y="{y-16}" width="62" height="36" rx="8" fill="#111827" opacity="{opacity}"/>
-    <line x1="{x-14}" y1="{y+2}" x2="{x+14}" y2="{y+2}" stroke="#111827" stroke-width="8" opacity="{opacity}"/>
-    <path d="M{x-34},{y+70} Q{x+8},{y+88} {x+52},{y+70}" fill="none" stroke="#111827" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
+    <path d="{face_path(x, y)}" fill="none" stroke="#111827" stroke-width="6" opacity="{opacity}"/>
+    <rect x="{x-76}" y="{y-14}" width="62" height="36" rx="8" fill="#111827" opacity="{opacity}"/>
+    <rect x="{x+14}" y="{y-14}" width="62" height="36" rx="8" fill="#111827" opacity="{opacity}"/>
+    <line x1="{x-14}" y1="{y+4}" x2="{x+14}" y2="{y+4}" stroke="#111827" stroke-width="8" opacity="{opacity}"/>
+    <path d="M{x-34},{y+68} Q{x+8},{y+86} {x+52},{y+68}" fill="none" stroke="#111827" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
     """
 
 
 def generic_head(x: int, y: int, color: str, opacity: float) -> str:
     return f"""
-    <circle cx="{x}" cy="{y}" r="118" fill="{color}" stroke="#111827" stroke-width="7" opacity="{opacity}"/>
+    {hair_svg(x, y, opacity)}
+    <path d="{face_path(x, y)}" fill="{color}" stroke="#111827" stroke-width="6" opacity="{opacity}"/>
     <circle cx="{x-38}" cy="{y+4}" r="13" fill="#ffffff" opacity="{opacity}"/>
     <circle cx="{x+38}" cy="{y+4}" r="13" fill="#ffffff" opacity="{opacity}"/>
     <path d="M{x-36},{y+58} Q{x},{y+72} {x+36},{y+58}" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
@@ -403,7 +437,7 @@ def render_svg(
     character_groups = []
     for pos_index, char_id in enumerate(ordered_ids[:4]):
         x = x_positions.get(char_id, fallback_positions[min(pos_index, len(fallback_positions) - 1)])
-        character_groups.append(character_svg(characters[char_id], x, 430, char_id == speaker_id))
+        character_groups.append(character_svg(characters[char_id], x, 500, char_id == speaker_id))
 
     style = data.get("style", "国拟人对话")
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}">
@@ -426,21 +460,21 @@ def render_svg(
   <rect x="300" y="184" width="1320" height="12" rx="6" fill="#cbd5e1"/>
   <rect x="300" y="184" width="{progress_width}" height="12" rx="6" fill="{active_color}"/>
 
-  <ellipse cx="960" cy="694" rx="620" ry="104" fill="#a7c7b9" opacity="0.62"/>
-  <rect x="392" y="625" width="1136" height="84" rx="8" fill="#48635b"/>
-  <rect x="454" y="650" width="1012" height="38" rx="8" fill="#729486" opacity="0.9"/>
+  <ellipse cx="960" cy="724" rx="620" ry="104" fill="#a7c7b9" opacity="0.62"/>
+  <rect x="392" y="655" width="1136" height="84" rx="8" fill="#48635b"/>
+  <rect x="454" y="680" width="1012" height="38" rx="8" fill="#729486" opacity="0.9"/>
 
   {''.join(character_groups)}
 
-  {rounded_rect(104, 222, 560, 150, 8, "#ffffff", "#cbd5e1", 3, 0.97)}
-  <text x="136" y="276" font-size="34" fill="#111827" font-weight="800"
+  {rounded_rect(104, 190, 560, 112, 8, "#ffffff", "#cbd5e1", 3, 0.97)}
+  <text x="136" y="236" font-size="32" fill="#111827" font-weight="800"
     font-family="PingFang SC, Hiragino Sans GB, STHeiti, Arial Unicode MS, sans-serif">{escape(task_title)}</text>
-  {tspans(objective_lines[:2], 136, 320, 25, fill="#475569", weight="600")}
+  {tspans(objective_lines[:1], 136, 276, 24, fill="#475569", weight="600")}
 
-  {rounded_rect(1256, 222, 560, 150, 8, "#ffffff", "#cbd5e1", 3, 0.97)}
-  <text x="1288" y="276" font-size="30" fill="#111827" font-weight="800"
+  {rounded_rect(1256, 190, 560, 112, 8, "#ffffff", "#cbd5e1", 3, 0.97)}
+  <text x="1288" y="236" font-size="30" fill="#111827" font-weight="800"
     font-family="PingFang SC, Hiragino Sans GB, STHeiti, Arial Unicode MS, sans-serif">关键事实</text>
-  {tspans(fact_lines[:2], 1288, 320, 24, fill="#475569", weight="600")}
+  {tspans(fact_lines[:1], 1288, 276, 23, fill="#475569", weight="600")}
 
   <g>
     {rounded_rect(174, 808, 1572, 190, 8, "#ffffff", "#111827", 4, 0.98)}
@@ -626,14 +660,14 @@ def write_markdown_files(base_dir: Path, data: dict[str, Any], characters: dict[
     base_dir.mkdir(parents=True, exist_ok=True)
     title = data.get("title", "")
     character_summary = "、".join(f"{char.get('name')}({char.get('role')})" for char in characters.values())
-    task_summary = " / ".join(task.get("title", "") for task in tasks.values())
+    act_summary = " / ".join(task.get("title", "") for task in tasks.values())
     brief = [
         f"# {title}",
         "",
         f"- 风格：{data.get('style', '国拟人对话')}",
         f"- 目标时长：{data.get('targetDurationSec', 180)} 秒",
         f"- 角色：{character_summary}",
-        f"- 任务结构：{task_summary}",
+        f"- 故事结构：{act_summary}",
     ]
     (base_dir / "brief.md").write_text("\n".join(brief) + "\n", encoding="utf-8")
 
@@ -657,7 +691,7 @@ def write_markdown_files(base_dir: Path, data: dict[str, Any], characters: dict[
             [
                 f"## 镜头 {index:02d}",
                 "",
-                f"- 任务：{task.get('title', '')}",
+                f"- 段落：{task.get('title', '')}",
                 f"- 说话者：{speaker.get('name', '')}",
                 f"- 画面：三角色桌边构图，{speaker.get('name', '')} 高亮，底部气泡显示当前台词。",
                 f"- 台词：{line.get('text', '')}",

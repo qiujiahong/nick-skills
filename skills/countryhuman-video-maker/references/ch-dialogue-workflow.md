@@ -4,11 +4,13 @@ Use this reference when building a countryhuman / CH-style voiced dialogue video
 
 ## Story Shape
 
-Prefer three tasks for a 3-minute video:
+Prefer three acts for a 3-minute video:
 
 1. `需求`：who wants what, what pressure created the need, and what the constraint is.
 2. `行动`：how the deal, plan, experiment, or confrontation unfolds.
 3. `复盘`：what changed, who reacted, and what the viewer should remember.
+
+The act/task fields are production structure only. Characters should not say `任务一`, `任务二`, or `任务三`; write the dialogue as a compact story conversation.
 
 For historical and geopolitical stories, keep the spine factual and let humor come from character contrast, not from inventing facts.
 
@@ -23,7 +25,7 @@ For historical and geopolitical stories, keep the spine factual and let humor co
 
 - One speaker per line.
 - Keep most lines between 25 and 55 Chinese characters for readable timing.
-- Give every task a mini-turn: setup, pushback, answer, consequence.
+- Give every act a mini-turn: setup, pushback, answer, consequence.
 - Do not use narration unless the user asks for it. If context is needed, put it into a character's line or the on-screen fact label.
 - Mark uncertain details with softer language: `公开资料称`, `外界报道`, `据称`, `后来被公开展示`.
 - Keep task titles, task objectives, fact labels, captions, and publish copy in Chinese by default.
@@ -34,7 +36,8 @@ For historical and geopolitical stories, keep the spine factual and let humor co
 - Use a stable three-character layout so viewers can track the speakers.
 - Highlight the active speaker with a ring, stage light, or nameplate.
 - Put the current line in a large speech bubble and keep it under 3 wrapped rows when possible.
-- Use the task title and one key fact at the top of the screen.
+- Use the act title and one key fact at the top of the screen.
+- Use a CH humanoid look inspired by common countryhuman references: white hair, flag face, slim upper body, clothing silhouette, and small identity accessories. Avoid default countryball round-head animal styling unless the user asks for it.
 - Avoid military gore, real injury, hate symbols, or celebration of real-world violence.
 
 ## Fact Notes
