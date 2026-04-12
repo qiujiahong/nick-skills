@@ -23,6 +23,7 @@ Inside `teaching-video/YYYYMMDD/<topic-slug>/`:
 - `remotion/`：Remotion project
 - `remotion/public/audio/scene-XX.wav`：copy of scene audio for Remotion `staticFile()`
 - `output/<topic-slug>.mp4`：final voiced video
+- `output/<topic-slug>-summary.md`：publish-ready summary copy, default for 视频号
 
 ## timing.json Shape
 
@@ -82,6 +83,19 @@ ffprobe -v error -show_entries stream=codec_type -of csv=p=0 output/<topic-slug>
 ```
 
 The output must include both `video` and `audio` streams.
+
+## Publish Summary
+
+After rendering, write `output/<topic-slug>-summary.md` next to the mp4. The file should be copy that the user can paste into 视频号:
+
+- title
+- one-sentence summary
+- 120 to 220 character body
+- 3 to 5 key takeaways
+- 3 to 6 hashtags
+- one pinned-comment candidate
+
+Keep it aligned with the narration and avoid production notes.
 
 ## Reference
 

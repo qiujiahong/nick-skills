@@ -83,12 +83,15 @@ teaching-video/YYYYMMDD/<topic-slug>/
   audio/
   remotion/
   output/
+    <topic-slug>.mp4
+    <topic-slug>-summary.md
 ```
 
 最终产物默认放在：
 
 ```text
 teaching-video/YYYYMMDD/<topic-slug>/output/<topic-slug>.mp4
+teaching-video/YYYYMMDD/<topic-slug>/output/<topic-slug>-summary.md
 ```
 
 ## Workflow
@@ -105,6 +108,7 @@ teaching-video/YYYYMMDD/<topic-slug>/output/<topic-slug>.mp4
 10. **Build Remotion video**：调用 `remotion` skill 创建或更新 `remotion/` 项目，按 `timing.json` 编排画面和 `<Audio>`。
 11. **Preview and fix sync**：用 Remotion preview 或 render 检查音画对应。旁白提到的概念，应在 0.5 秒内出现在画面上。
 12. **Render final video**：渲染有声 mp4 到 `output/`。
+13. **Write publish summary**：在 `output/<topic-slug>-summary.md` 写一份可直接用于发布的总结文案，默认面向视频号。
 
 ## Duration Rules
 
@@ -135,6 +139,30 @@ teaching-video/YYYYMMDD/<topic-slug>/output/<topic-slug>.mp4
 
 完整编排契约见 [Remotion teaching workflow](references/remotion-teaching-workflow.md)。
 
+## Publish Summary Rules
+
+最终视频旁边必须生成一份发布总结：
+
+```text
+output/<topic-slug>-summary.md
+```
+
+默认按视频号发布使用，内容必须是面向观众的成稿文案，而不是制作说明。包含：
+
+- `标题`：20 字以内，适合视频号标题或首行。
+- `一句话摘要`：40 到 80 字，讲清视频对观众的收益。
+- `发布正文`：120 到 220 字，能直接复制到视频号。
+- `要点`：3 到 5 条，提炼观众会学到什么。
+- `话题标签`：3 到 6 个，使用中文技术社区常用标签。
+- `置顶评论候选`：1 句，引导讨论或补充行动。
+
+写作要求：
+
+- 只写用户可发布的文案，不要写“本视频展示了”“界面包含”等制作视角表述。
+- 不要复述整段旁白；把内容压缩成判断、收益和下一步行动。
+- 不要夸大视频里没有证明的结论。
+- 面向中文 / 国内读者时，避免默认把海外服务当作唯一路径。
+
 ## Quality Gate
 
 完成前检查：
@@ -149,12 +177,14 @@ teaching-video/YYYYMMDD/<topic-slug>/output/<topic-slug>.mp4
 - 视频画面根据真实音频时长编排，而不是只按估算时长。
 - 旁白里的关键概念都在相邻画面出现。
 - 最终 `output/<topic-slug>.mp4` 有音轨，且可以播放。
+- `output/<topic-slug>-summary.md` 存在，且内容可直接复制到视频号发布。
 
 ## Final Response
 
 向用户返回：
 
 - 视频文件路径
+- 视频号总结文件路径
 - 实际总时长
 - 使用的风格
 - 使用的 VibeVoice 配置摘要，例如模型、端点或命令、是否使用克隆声音
