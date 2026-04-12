@@ -16,7 +16,7 @@ description: 生成 CH / countryhuman 风格的有声对话视频。Use when the
 - `对话结构`：可选。默认 3 个任务 / 3 幕，每幕 50 到 70 秒。
 - `时间要求`：可选。默认 3 分钟，目标 170 到 190 秒。
 - `事实要求`：可选。涉及真实历史、现代政治、军工、金融或医疗法律内容时，先核实关键事实。
-- `配音要求`：可选。默认本地配音，不调用远程 TTS API。
+- `配音要求`：可选。默认本地 `voice-tts` / VibeVoice 真人感配音，不调用远程 TTS API；`say` 只能作为明确应急 fallback。
 
 ## Output Directory
 
@@ -57,11 +57,11 @@ countryhuman-video/YYYYMMDD/<topic-slug>/
   "title": "沙特买东风导弹的故事",
   "slug": "saudi-dongfeng-dialogue",
   "targetDurationSec": 180,
-  "style": "CH(countryhuman)地缘对话",
+  "style": "国拟人地缘对话",
   "characters": [
-    {"id": "rabbit", "name": "兔子", "role": "中国", "voice": "Tingting"},
-    {"id": "camel", "name": "骆驼", "role": "沙特", "voice": "Meijia"},
-    {"id": "eagle", "name": "鹰酱", "role": "美国", "voice": "Sinji"}
+    {"id": "rabbit", "name": "兔子", "role": "中国", "voice": "Bowen"},
+    {"id": "camel", "name": "骆驼", "role": "沙特", "voice": "Anchen"},
+    {"id": "eagle", "name": "鹰酱", "role": "美国", "voice": "Xinran"}
   ],
   "tasks": [
     {"id": "task-1", "title": "任务一：提出需求", "objective": "解释为什么要找远程威慑"},
@@ -69,7 +69,7 @@ countryhuman-video/YYYYMMDD/<topic-slug>/
     {"id": "task-3", "title": "任务三：复盘影响", "objective": "解释地区平衡和后续影响"}
   ],
   "dialogue": [
-    {"task": "task-1", "speaker": "camel", "text": "台词", "durationSec": 9.0}
+    {"task": "task-1", "speaker": "camel", "text": "台词", "spokenText": "用于配音的中文读法", "durationSec": 9.0}
   ],
   "summary": {
     "title": "16字以内标题",
@@ -88,23 +88,46 @@ countryhuman-video/YYYYMMDD/<topic-slug>/
 ```bash
 python3 skills/countryhuman-video-maker/scripts/render_countryhuman_dialogue.py \
   --input countryhuman-video/YYYYMMDD/<slug>/dialogue.json \
-  --output-root countryhuman-video \
-  --voice-engine say
+  --output-root countryhuman-video
 ```
 
 脚本依赖：
 
 - `ffmpeg` / `ffprobe`
-- macOS `say` 和 `sips`，用于本地配音和 SVG 转 PNG
+- macOS `sips`，用于 SVG 转 PNG
+- `voice-tts` skill 的本地 VibeVoice 环境，用于真人感中文配音
 - Python 标准库；不需要 Pillow、moviepy 或远程视频 API
 
-如果用户明确要求更拟人的音色，先尝试 `voice-tts` skill 生成每句 wav，再把音频路径写进 `dialogue[].audioFile`，或改脚本接入本地 `voice-tts/scripts/tts.py`。不要把台词发到远程 TTS。
+默认配音命令会读取 `$HOME/.cache/nick-skills/vibevoice/env.sh`，并调用 `skills/voice-tts/scripts/tts.py`。首次使用前如果本地 VibeVoice 还没部署，先运行：
+
+```bash
+skills/voice-tts/scripts/ensure_vibevoice.sh
+```
+
+只有在明确接受低质量系统朗读时，才使用：
+
+```bash
+python3 skills/countryhuman-video-maker/scripts/render_countryhuman_dialogue.py \
+  --input countryhuman-video/YYYYMMDD/<slug>/dialogue.json \
+  --voice-engine say
+```
+
+若需要修正英文缩写、型号、数字的读法，给台词加 `spokenText`，`text` 继续作为屏幕字幕。不要把台词发到远程 TTS。
+
+调整台词时长但不想重跑本地模型时，可在已有 `audio/line-XX-vibevoice.wav` 的目录里使用：
+
+```bash
+python3 skills/countryhuman-video-maker/scripts/render_countryhuman_dialogue.py \
+  --input countryhuman-video/YYYYMMDD/<slug>/dialogue.json \
+  --reuse-audio
+```
 
 ## Style Rules
 
 - CH 是拟人化叙事外壳，不是现实群体评价。让角色代表国家/机构立场，避免攻击民族、宗教或普通民众。
 - 兔子、骆驼、鹰酱等网络代称可以使用，但画面和台词要保持讽刺克制。
 - 屏幕文字只放任务名、关键事实和当前台词，不要把资料全文塞进画面。
+- 任务标题、任务目标、关键事实、字幕、发布文案默认全部写中文；英文型号可在字幕保留，但 `spokenText` 要改成中文读法。
 - 每 6 到 12 秒换一张画面；每幕至少让 2 个角色发言。
 - 事实表达用“据公开资料”“外界报道”“后来公开展示”等措辞，避免把未证实细节说成定论。
 
@@ -120,6 +143,8 @@ python3 skills/countryhuman-video-maker/scripts/render_countryhuman_dialogue.py 
 - 实际总时长在用户要求的 10% 范围内；3 分钟默认接受 170 到 190 秒。
 - 三个角色都至少有 3 句台词；每个任务 / 幕都有明确冲突和小结。
 - 画面能看出 CH / countryhuman 风格：角色拟人、头部带国别符号、当前说话者高亮。
+- `timing.json` 的 `voiceEngine` 默认为 `voice-tts`；不要把 `say` fallback 当最终质量交付。
+- 如果只是修正字幕、画面或 `durationSec`，优先用 `--reuse-audio` 保留已生成的 VibeVoice 音频。
 - 最终总结文案短到可直接发朋友圈 / 视频号。
 
 ## Final Response

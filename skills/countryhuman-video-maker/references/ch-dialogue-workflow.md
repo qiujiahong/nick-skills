@@ -26,6 +26,8 @@ For historical and geopolitical stories, keep the spine factual and let humor co
 - Give every task a mini-turn: setup, pushback, answer, consequence.
 - Do not use narration unless the user asks for it. If context is needed, put it into a character's line or the on-screen fact label.
 - Mark uncertain details with softer language: `公开资料称`, `外界报道`, `据称`, `后来被公开展示`.
+- Keep task titles, task objectives, fact labels, captions, and publish copy in Chinese by default.
+- Use `spokenText` when subtitles contain English abbreviations, missile designations, or numbers that should be read naturally in Chinese.
 
 ## Visual Rules
 
@@ -47,13 +49,14 @@ When the exact number, year, or motivation varies by source, avoid a single hard
 
 ## Local Rendering Notes
 
-Use `scripts/render_countryhuman_dialogue.py` for deterministic local output:
+Use `scripts/render_countryhuman_dialogue.py` for deterministic local output. The default voice engine is local `voice-tts` / VibeVoice for more human-like Chinese voices:
 
 ```bash
 python3 skills/countryhuman-video-maker/scripts/render_countryhuman_dialogue.py \
   --input countryhuman-video/YYYYMMDD/<slug>/dialogue.json \
-  --output-root countryhuman-video \
-  --voice-engine say
+  --output-root countryhuman-video
 ```
 
-The renderer generates SVG frames, converts them with macOS `sips`, synthesizes local speech with `say`, and assembles the mp4 with `ffmpeg`.
+The renderer generates SVG frames, converts them with macOS `sips`, synthesizes local speech with `voice-tts`, and assembles the mp4 with `ffmpeg`. Use `--voice-engine say` only as a low-quality fallback.
+
+When only captions, visual copy, or planned `durationSec` values changed, pass `--reuse-audio` to keep existing `audio/line-XX-vibevoice.wav` files and avoid regenerating every voice line.

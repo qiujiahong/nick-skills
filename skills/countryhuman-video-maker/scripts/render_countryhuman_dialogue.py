@@ -6,14 +6,17 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from html import escape
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 
 WIDTH = 1920
@@ -27,20 +30,22 @@ DEFAULT_COLORS = {
 }
 
 DEFAULT_VOICES = {
-    "rabbit": "Tingting",
-    "camel": "Meijia",
-    "eagle": "Sinji",
+    "rabbit": "Bowen",
+    "camel": "Anchen",
+    "eagle": "Xinran",
 }
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+DEFAULT_VOICE_TTS_SCRIPT = SCRIPT_DIR.parent.parent / "voice-tts" / "scripts" / "tts.py"
+DEFAULT_VIBEVOICE_ENV_FILE = Path.home() / ".cache/nick-skills/vibevoice/env.sh"
 
-def run(command: list[str], *, quiet: bool = False) -> subprocess.CompletedProcess[str]:
+
+def run(command: list[str], *, quiet: bool = False, env: Optional[dict[str, str]] = None) -> subprocess.CompletedProcess[str]:
     stdout = subprocess.DEVNULL if quiet else None
-    stderr = subprocess.PIPE if quiet else None
+    stderr = subprocess.DEVNULL if quiet else None
     try:
-        return subprocess.run(command, check=True, text=True, stdout=stdout, stderr=stderr)
-    except subprocess.CalledProcessError as exc:
-        if quiet and exc.stderr:
-            print(exc.stderr, file=sys.stderr)
+        return subprocess.run(command, check=True, text=True, stdout=stdout, stderr=stderr, env=env)
+    except subprocess.CalledProcessError:
         raise
 
 
@@ -106,6 +111,22 @@ def load_json(path: Path) -> dict[str, Any]:
     if not data.get("dialogue"):
         raise SystemExit("dialogue.json requires dialogue[]")
     return data
+
+
+def parse_env_file(path: Path) -> dict[str, str]:
+    values = {}
+    if not path.exists():
+        return values
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line.startswith("export "):
+            continue
+        for token in shlex.split(line[len("export ") :]):
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            values[key] = value
+    return values
 
 
 def normalize_characters(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -362,7 +383,7 @@ def render_svg(
 ) -> str:
     speaker_id = line.get("speaker", "")
     task = tasks.get(line.get("task"), next(iter(tasks.values())))
-    title = data.get("title", "Countryhuman Dialogue")
+    title = data.get("title", "国拟人对话视频")
     task_title = task.get("title", "")
     objective = task.get("objective", "")
     fact = line.get("fact") or task.get("fact") or ""
@@ -384,7 +405,7 @@ def render_svg(
         x = x_positions.get(char_id, fallback_positions[min(pos_index, len(fallback_positions) - 1)])
         character_groups.append(character_svg(characters[char_id], x, 430, char_id == speaker_id))
 
-    style = data.get("style", "countryhuman")
+    style = data.get("style", "国拟人对话")
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}">
   <rect width="{WIDTH}" height="{HEIGHT}" fill="#f7fbf7"/>
   <path d="M0,0 H1920 V220 C1500,180 1180,250 900,210 C600,170 330,220 0,185 Z" fill="#e8f3ef"/>
@@ -400,7 +421,7 @@ def render_svg(
   <text x="110" y="96" font-size="46" fill="#111827" font-weight="800"
     font-family="PingFang SC, Hiragino Sans GB, STHeiti, Arial Unicode MS, sans-serif">{escape(title)}</text>
   <text x="112" y="148" font-size="27" fill="#334155" font-weight="600"
-    font-family="PingFang SC, Hiragino Sans GB, STHeiti, Arial Unicode MS, sans-serif">CH 对话 · {escape(style)} · 第 {index + 1}/{total} 句 · {start_sec:.1f}s - {start_sec + duration_sec:.1f}s</text>
+    font-family="PingFang SC, Hiragino Sans GB, STHeiti, Arial Unicode MS, sans-serif">国拟人对话 · {escape(style)} · 第 {index + 1}/{total} 句 · {start_sec:.1f}秒 - {start_sec + duration_sec:.1f}秒</text>
 
   <rect x="300" y="184" width="1320" height="12" rx="6" fill="#cbd5e1"/>
   <rect x="300" y="184" width="{progress_width}" height="12" rx="6" fill="{active_color}"/>
@@ -440,6 +461,44 @@ def convert_svg_to_png(svg_path: Path, png_path: Path) -> None:
 def synthesize_say(text: str, voice: str, rate: int, raw_output: Path) -> None:
     raw_output.parent.mkdir(parents=True, exist_ok=True)
     run(["say", "-v", voice, "-r", str(rate), "-o", str(raw_output), text], quiet=True)
+
+
+def synthesize_voice_tts(
+    text: str,
+    speaker_id: str,
+    output_wav: Path,
+    args: argparse.Namespace,
+    env: dict[str, str],
+) -> None:
+    tts_script = Path(args.voice_tts_script).expanduser().resolve()
+    if not tts_script.exists():
+        raise SystemExit(f"voice-tts script not found: {tts_script}")
+
+    output_wav.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", encoding="utf-8", delete=False) as tmp:
+        tmp.write(text)
+        text_file = tmp.name
+    try:
+        command = [
+            sys.executable,
+            str(tts_script),
+            "-f",
+            text_file,
+            "-o",
+            str(output_wav),
+            "--speaker-id",
+            speaker_id,
+            "--seed",
+            str(args.vibevoice_seed),
+            "--language",
+            "zh",
+            "--cfg-scale",
+            str(args.vibevoice_cfg_scale),
+            "--no-ensure",
+        ]
+        run(command, quiet=False if args.verbose_tts else True, env=env)
+    finally:
+        Path(text_file).unlink(missing_ok=True)
 
 
 def normalize_audio(raw_audio: Path, output_wav: Path, duration_sec: float) -> None:
@@ -571,7 +630,7 @@ def write_markdown_files(base_dir: Path, data: dict[str, Any], characters: dict[
     brief = [
         f"# {title}",
         "",
-        f"- 风格：{data.get('style', 'CH(countryhuman)对话')}",
+        f"- 风格：{data.get('style', '国拟人对话')}",
         f"- 目标时长：{data.get('targetDurationSec', 180)} 秒",
         f"- 角色：{character_summary}",
         f"- 任务结构：{task_summary}",
@@ -658,13 +717,21 @@ def main() -> None:
     parser.add_argument("--output-root", default="countryhuman-video", help="Output root directory")
     parser.add_argument("--slug", help="Override output slug")
     parser.add_argument("--date", default=today_yyyymmdd(), help="YYYYMMDD output date")
-    parser.add_argument("--voice-engine", choices=["say"], default="say", help="Local voice engine")
+    parser.add_argument("--voice-engine", choices=["voice-tts", "say"], default="voice-tts", help="Local voice engine")
+    parser.add_argument("--voice-tts-script", default=str(DEFAULT_VOICE_TTS_SCRIPT), help="Path to voice-tts/scripts/tts.py")
+    parser.add_argument("--vibevoice-env-file", default=str(DEFAULT_VIBEVOICE_ENV_FILE), help="Path to local VibeVoice env.sh")
+    parser.add_argument("--vibevoice-seed", default="1227", help="Stable VibeVoice seed")
+    parser.add_argument("--vibevoice-cfg-scale", default="1.3", help="VibeVoice cfg scale")
+    parser.add_argument("--verbose-tts", action="store_true", help="Show voice-tts model logs")
+    parser.add_argument("--reuse-audio", action="store_true", help="Reuse existing generated audio files when present")
     parser.add_argument("--say-rate", type=int, default=178, help="macOS say speaking rate")
     parser.add_argument("--keep-svg", action="store_true", help="Keep intermediate SVG frames")
     args = parser.parse_args()
 
-    for binary in ("ffmpeg", "ffprobe", "sips", "say"):
+    for binary in ("ffmpeg", "ffprobe", "sips"):
         require_binary(binary)
+    if args.voice_engine == "say":
+        require_binary("say")
 
     input_path = Path(args.input).expanduser().resolve()
     data = load_json(input_path)
@@ -688,7 +755,16 @@ def main() -> None:
     write_markdown_files(base_dir, data, characters, tasks)
     write_summary(output_dir, slug, data)
 
-    installed_voices = available_say_voices()
+    installed_voices = available_say_voices() if args.voice_engine == "say" else set()
+    voice_tts_env = os.environ.copy()
+    if args.voice_engine == "voice-tts":
+        env_file = Path(args.vibevoice_env_file).expanduser()
+        voice_tts_env.update(parse_env_file(env_file))
+        if not voice_tts_env.get("VIBEVOICE_TTS_CMD"):
+            raise SystemExit(
+                "Local VibeVoice is not configured. Run skills/voice-tts/scripts/ensure_vibevoice.sh first, "
+                "or pass --voice-engine say for the lower-quality macOS fallback."
+            )
     lines = data["dialogue"]
     default_line_duration = float(data.get("targetDurationSec", 180)) / max(len(lines), 1)
     timings = []
@@ -699,6 +775,7 @@ def main() -> None:
         speaker_id = line.get("speaker")
         speaker = characters.get(speaker_id, {"voice": "Tingting", "name": speaker_id, "color": "#334155"})
         text = str(line.get("text", "")).strip()
+        spoken_text = str(line.get("spokenText") or text).strip()
         if not text:
             raise SystemExit(f"dialogue[{index}] has empty text")
 
@@ -716,14 +793,26 @@ def main() -> None:
                 raise SystemExit(f"dialogue[{index}] audioFile not found: {source_audio}")
             voice = "external"
             raw_duration = ffprobe_duration(source_audio)
-            print(f"[{index + 1:02d}/{len(lines):02d}] {speaker.get('name', speaker_id)} -> external audio: {text[:36]}")
+            print(f"[{index + 1:02d}/{len(lines):02d}] {speaker.get('name', speaker_id)} -> 外部音频: {text[:36]}", flush=True)
             duration = max(planned, raw_duration + 0.35)
             normalize_audio(source_audio, wav_audio, duration)
+        elif args.voice_engine == "voice-tts":
+            requested_voice = str(line.get("voice") or speaker.get("voice") or "Bowen")
+            raw_wav = audio_dir / f"line-{index + 1:02d}-vibevoice.wav"
+            if args.reuse_audio and raw_wav.exists():
+                print(f"[{index + 1:02d}/{len(lines):02d}] {speaker.get('name', speaker_id)} -> 复用 VibeVoice/{requested_voice}: {text[:36]}", flush=True)
+            else:
+                print(f"[{index + 1:02d}/{len(lines):02d}] {speaker.get('name', speaker_id)} -> VibeVoice/{requested_voice}: {text[:36]}", flush=True)
+                synthesize_voice_tts(spoken_text, requested_voice, raw_wav, args, voice_tts_env)
+            raw_duration = ffprobe_duration(raw_wav)
+            duration = max(planned, raw_duration + 0.35)
+            normalize_audio(raw_wav, wav_audio, duration)
+            voice = requested_voice
         else:
             requested_voice = str(line.get("voice") or speaker.get("voice") or "Tingting")
             voice = pick_voice(requested_voice, installed_voices)
-            print(f"[{index + 1:02d}/{len(lines):02d}] {speaker.get('name', speaker_id)} -> {voice}: {text[:36]}")
-            synthesize_say(text, voice, args.say_rate, raw_audio)
+            print(f"[{index + 1:02d}/{len(lines):02d}] {speaker.get('name', speaker_id)} -> say/{voice}: {text[:36]}", flush=True)
+            synthesize_say(spoken_text, voice, args.say_rate, raw_audio)
             raw_duration = ffprobe_duration(raw_audio)
             duration = max(planned, raw_duration + 0.35)
             normalize_audio(raw_audio, wav_audio, duration)
@@ -759,10 +848,12 @@ def main() -> None:
         "fps": FPS,
         "width": WIDTH,
         "height": HEIGHT,
-        "style": data.get("style", "CH(countryhuman)对话"),
+        "style": data.get("style", "国拟人对话"),
         "targetDurationSec": data.get("targetDurationSec", 180),
         "actualDurationSec": round(actual_duration, 3),
         "voiceEngine": args.voice_engine,
+        "vibevoiceSeed": args.vibevoice_seed if args.voice_engine == "voice-tts" else None,
+        "vibevoiceCfgScale": args.vibevoice_cfg_scale if args.voice_engine == "voice-tts" else None,
         "sayRate": args.say_rate,
         "streams": streams,
         "lines": timings,
