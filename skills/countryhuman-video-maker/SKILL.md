@@ -13,10 +13,11 @@ description: 生成 CH / countryhuman 风格的有声对话视频。Use when the
 
 - `视频主题`：必选。没有主题时先问用户，不要猜。
 - `角色`：可选。默认按用户命名；常见预设包括 `兔子`、`骆驼`、`鹰酱`。
-- `对话结构`：可选。默认 3 个任务 / 3 幕，每幕 50 到 70 秒。
-- `时间要求`：可选。默认 3 分钟，目标 170 到 190 秒。
+- `对话结构`：可选。默认 3 个任务 / 3 幕；一分钟短视频每幕 2 到 3 句，三分钟视频每幕 5 到 7 句。
+- `时间要求`：可选。默认 3 分钟，目标 170 到 190 秒；如果用户说“一分钟点”，目标 55 到 75 秒。
 - `事实要求`：可选。涉及真实历史、现代政治、军工、金融或医疗法律内容时，先核实关键事实。
 - `配音要求`：可选。默认本地 `voice-tts` / VibeVoice 真人感配音，不调用远程 TTS API；`say` 只能作为明确应急 fallback。
+- `称呼边界`：可选。用户要求“不明写”某些国家或主体时，屏幕文字、对白、任务名和发布文案都改用代称。
 
 ## Output Directory
 
@@ -44,9 +45,10 @@ countryhuman-video/YYYYMMDD/<topic-slug>/
 2. **Verify the spine**：真实事件至少核实年份、主体、冲突点和后果。把链接或资料摘要写进 `sources.md`。
 3. **Write the 3-act arc**：用“需求 -> 交易/行动 -> 后果/复盘”或用户指定结构拆成 3 幕。`tasks` 只是内部时间线，不要让角色说“任务一/任务二/任务三”。
 4. **Write dialogue first**：每句只让一个角色说话；对白要像三个人推进故事，避免旁白腔和流程汇报腔。
-5. **Create `dialogue.json`**：按下面 schema 写入角色、任务、台词、计划时长和发布文案。
-6. **Render locally**：运行 `scripts/render_countryhuman_dialogue.py` 生成配音、画面、时间线和 mp4。
-7. **Quality gate**：检查总时长、音轨、画面、字幕和事实表述。
+5. **Apply naming limits**：如果用户要求避开明写主体，使用 `东边`、`海湾买家`、`保护伞`、`第二家店` 等代称，不在标题、角色 role、任务、字幕或文案里写禁用词。
+6. **Create `dialogue.json`**：按下面 schema 写入角色、任务、台词、计划时长和发布文案。
+7. **Render locally**：运行 `scripts/render_countryhuman_dialogue.py` 生成配音、逐帧动画、时间线和 mp4。
+8. **Quality gate**：检查总时长、音轨、画面动作、字幕和事实表述。
 
 ## Dialogue Schema
 
@@ -54,14 +56,14 @@ countryhuman-video/YYYYMMDD/<topic-slug>/
 
 ```json
 {
-  "title": "沙特买东风导弹的故事",
+  "title": "骆驼的东风订单",
   "slug": "saudi-dongfeng-dialogue",
-  "targetDurationSec": 180,
+  "targetDurationSec": 60,
   "style": "国拟人地缘对话",
   "characters": [
-    {"id": "rabbit", "name": "兔子", "role": "中国", "voice": "Bowen"},
-    {"id": "camel", "name": "骆驼", "role": "沙特", "voice": "Anchen"},
-    {"id": "eagle", "name": "鹰酱", "role": "美国", "voice": "Xinran"}
+    {"id": "rabbit", "name": "兔子", "role": "东边卖家", "voice": "Bowen"},
+    {"id": "camel", "name": "骆驼", "role": "海湾买家", "voice": "Anchen"},
+    {"id": "eagle", "name": "鹰酱", "role": "保护伞", "voice": "Xinran"}
   ],
   "tasks": [
     {"id": "act-1", "title": "第一幕：压力上桌", "objective": "解释为什么要找远程威慑"},
@@ -98,6 +100,8 @@ python3 skills/countryhuman-video-maker/scripts/render_countryhuman_dialogue.py 
 - `voice-tts` skill 的本地 VibeVoice 环境，用于真人感中文配音
 - Python 标准库；不需要 Pillow、moviepy 或远程视频 API
 
+默认会生成逐帧动画：当前说话者有身体起伏、手势、嘴型和眨眼。需要快速草稿时才加 `--static` 输出静帧视频；需要更细动作时可提高 `--animation-fps`。
+
 默认配音命令会读取 `$HOME/.cache/nick-skills/vibevoice/env.sh`，并调用 `skills/voice-tts/scripts/tts.py`。首次使用前如果本地 VibeVoice 还没部署，先运行：
 
 ```bash
@@ -129,6 +133,7 @@ python3 skills/countryhuman-video-maker/scripts/render_countryhuman_dialogue.py 
 - 屏幕文字只放任务名、关键事实和当前台词，不要把资料全文塞进画面。
 - 任务标题、任务目标、关键事实、字幕、发布文案默认全部写中文；英文型号可在字幕保留，但 `spokenText` 要改成中文读法。
 - 对白里不要出现“任务一、任务二、任务三”。如果需要结构感，只在屏幕小标题里写“第一幕、第二幕、第三幕”。
+- 用户要求不明写国家/主体时，角色 `role`、任务标题、关键事实、台词和发布文案都用代称；不要只改对白而漏掉屏幕小标题。
 - 每 6 到 12 秒换一张画面；每幕至少让 2 个角色发言。
 - 事实表达用“据公开资料”“外界报道”“后来公开展示”等措辞，避免把未证实细节说成定论。
 
@@ -141,9 +146,10 @@ python3 skills/countryhuman-video-maker/scripts/render_countryhuman_dialogue.py 
 - `dialogue.json`、`script.md`、`storyboard.md`、`timing.json` 存在。
 - `sources.md` 覆盖真实事件的关键事实。
 - `output/<slug>.mp4` 有 video 和 audio 两条 stream。
-- 实际总时长在用户要求的 10% 范围内；3 分钟默认接受 170 到 190 秒。
+- 实际总时长在用户要求的 10% 范围内；3 分钟默认接受 170 到 190 秒；“一分钟点”默认接受 55 到 75 秒。
 - 三个角色都至少有 3 句台词；每个任务 / 幕都有明确冲突和小结。
 - 画面能看出 CH / countryhuman 风格：角色拟人、头部带国别符号、当前说话者高亮。
+- 非草稿视频的 `timing.json` 应为 `"animated": true`，并抽查相邻帧确认人物确实在动。
 - `timing.json` 的 `voiceEngine` 默认为 `voice-tts`；不要把 `say` fallback 当最终质量交付。
 - 如果只是修正字幕、画面或 `durationSec`，优先用 `--reuse-audio` 保留已生成的 VibeVoice 音频。
 - 最终总结文案短到可直接发朋友圈 / 视频号。

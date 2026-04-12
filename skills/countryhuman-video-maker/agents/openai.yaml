@@ -1,4 +1,4 @@
 interface:
   display_name: "Countryhuman Video Maker"
-  short_description: "Create voiced CH-style dialogue videos."
+  short_description: "Create animated, voiced CH-style dialogue videos."
   default_prompt: "Use $countryhuman-video-maker to create a voiced countryhuman dialogue video about:"

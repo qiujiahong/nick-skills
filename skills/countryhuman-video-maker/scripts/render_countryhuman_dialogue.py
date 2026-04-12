@@ -147,7 +147,7 @@ def normalize_characters(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
             {
                 "id": char_id,
                 "name": {"rabbit": "兔子", "camel": "骆驼", "eagle": "鹰酱"}[char_id],
-                "role": {"rabbit": "中国", "camel": "沙特", "eagle": "美国"}[char_id],
+                "role": {"rabbit": "东边卖家", "camel": "海湾买家", "eagle": "保护伞"}[char_id],
                 "voice": DEFAULT_VOICES[char_id],
                 "color": DEFAULT_COLORS[char_id],
             },
@@ -257,10 +257,37 @@ def rounded_rect(x: int, y: int, w: int, h: int, r: int, fill: str, stroke: str 
     )
 
 
-def character_svg(char: dict[str, Any], x: int, y: int, active: bool) -> str:
+def character_motion(char_id: str, active: bool, time_sec: float, line_index: int) -> dict[str, Any]:
+    phase = time_sec * (2 * math.pi)
+    idle = math.sin(phase * 0.42 + line_index)
+    if not active:
+        return {
+            "dx": 2.0 * math.sin(phase * 0.2 + line_index),
+            "dy": 3.0 * idle,
+            "mouthOpen": False,
+            "blink": int(time_sec * 2 + line_index) % 9 == 0,
+            "gesture": 0.0,
+        }
+    mouth_wave = math.sin(phase * 2.15)
+    gesture = (math.sin(phase * 0.72 + line_index) + 1) / 2
+    return {
+        "dx": 6.0 * math.sin(phase * 0.32 + line_index),
+        "dy": -8.0 + 8.0 * math.sin(phase * 0.55),
+        "mouthOpen": mouth_wave > -0.15,
+        "blink": int(time_sec * 2.4 + line_index) % 13 == 0,
+        "gesture": gesture,
+    }
+
+
+def character_svg(char: dict[str, Any], x: int, y: int, active: bool, motion: Optional[dict[str, Any]] = None) -> str:
     char_id = char.get("id")
+    motion = motion or {}
+    x = int(x + float(motion.get("dx", 0.0)))
+    y = int(y + float(motion.get("dy", 0.0)))
     opacity = 1.0 if active else 0.56
     color = char.get("color", "#334155")
+    mouth_open = bool(motion.get("mouthOpen", False))
+    blink = bool(motion.get("blink", False))
     glow = ""
     if active:
         glow = (
@@ -268,16 +295,16 @@ def character_svg(char: dict[str, Any], x: int, y: int, active: bool) -> str:
             f'<ellipse cx="{x}" cy="{y+20}" rx="132" ry="162" fill="none" stroke="{color}" stroke-width="9" opacity="0.85"/>'
         )
 
-    body = ch_body_svg(char_id, x, y, color, opacity)
+    body = ch_body_svg(char_id, x, y, color, opacity, float(motion.get("gesture", 0.0)))
 
     if char_id == "rabbit":
-        head = rabbit_head(x, y, opacity)
+        head = rabbit_head(x, y, opacity, mouth_open, blink)
     elif char_id == "camel":
-        head = camel_head(x, y, opacity)
+        head = camel_head(x, y, opacity, mouth_open, blink)
     elif char_id == "eagle":
-        head = eagle_head(x, y, opacity)
+        head = eagle_head(x, y, opacity, mouth_open, blink)
     else:
-        head = generic_head(x, y, color, opacity)
+        head = generic_head(x, y, color, opacity, mouth_open, blink)
 
     name = escape(f"{char.get('name', char_id)} / {char.get('role', '')}".strip(" /"))
     label = (
@@ -289,10 +316,12 @@ def character_svg(char: dict[str, Any], x: int, y: int, active: bool) -> str:
     return f"{body}{glow}{head}{label}"
 
 
-def ch_body_svg(char_id: str, x: int, y: int, color: str, opacity: float) -> str:
+def ch_body_svg(char_id: str, x: int, y: int, color: str, opacity: float, gesture: float) -> str:
     jacket = {"rabbit": "#1f2937", "camel": "#f8fafc", "eagle": "#111827"}.get(char_id, "#1f2937")
     shirt = {"rabbit": "#d9242e", "camel": "#198754", "eagle": "#f8fafc"}.get(char_id, color)
     tie = {"rabbit": "#f8fafc", "camel": "#d8b45b", "eagle": "#c91f37"}.get(char_id, "#f8fafc")
+    hand_y = y + 202 - int(gesture * 38)
+    hand_x = x + 142 + int(gesture * 12)
     scarf = ""
     if char_id == "camel":
         scarf = (
@@ -307,6 +336,9 @@ def ch_body_svg(char_id: str, x: int, y: int, color: str, opacity: float) -> str
       <path d="M{x-20},{y+136} L{x},{y+168} L{x+20},{y+136} L{x+10},{y+206} L{x-10},{y+206}Z" fill="{tie}" opacity="0.95"/>
       <path d="M{x-138},{y+160} C{x-92},{y+142} {x-62},{y+138} {x-28},{y+156}" fill="none" stroke="#ffffff" stroke-width="8" opacity="0.18"/>
       <path d="M{x+138},{y+160} C{x+92},{y+142} {x+62},{y+138} {x+28},{y+156}" fill="none" stroke="#ffffff" stroke-width="8" opacity="0.18"/>
+      <path d="M{x+92},{y+152} C{x+128},{y+168} {hand_x},{hand_y} {hand_x+24},{hand_y-14}" fill="none" stroke="{jacket}" stroke-width="24" stroke-linecap="round"/>
+      <circle cx="{hand_x+32}" cy="{hand_y-18}" r="15" fill="#e5e7eb" stroke="#111827" stroke-width="4"/>
+      <path d="M{x-92},{y+154} C{x-126},{y+178} {x-154},{y+194} {x-172},{y+220}" fill="none" stroke="{jacket}" stroke-width="22" stroke-linecap="round" opacity="0.82"/>
       {scarf}
     </g>
     """
@@ -330,7 +362,25 @@ def hair_svg(x: int, y: int, opacity: float, accent: str = "#f8fafc") -> str:
     """
 
 
-def rabbit_head(x: int, y: int, opacity: float) -> str:
+def eye_svg(x1: int, x2: int, y: int, opacity: float, blink: bool, fill: str = "#111827") -> str:
+    if blink:
+        return (
+            f'<path d="M{x1-18},{y} L{x1+18},{y}" stroke="{fill}" stroke-width="7" stroke-linecap="round" opacity="{opacity}"/>'
+            f'<path d="M{x2-18},{y} L{x2+18},{y}" stroke="{fill}" stroke-width="7" stroke-linecap="round" opacity="{opacity}"/>'
+        )
+    return (
+        f'<circle cx="{x1}" cy="{y}" r="10" fill="{fill}" opacity="{opacity}"/>'
+        f'<circle cx="{x2}" cy="{y}" r="10" fill="{fill}" opacity="{opacity}"/>'
+    )
+
+
+def mouth_svg(x: int, y: int, opacity: float, open_: bool, stroke: str = "#111827") -> str:
+    if open_:
+        return f'<ellipse cx="{x}" cy="{y+60}" rx="24" ry="13" fill="{stroke}" opacity="{opacity}"/>'
+    return f'<path d="M{x-34},{y+58} Q{x},{y+72} {x+34},{y+58}" fill="none" stroke="{stroke}" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>'
+
+
+def rabbit_head(x: int, y: int, opacity: float, mouth_open: bool, blink: bool) -> str:
     clip = f"rabbitClip{x}"
     return f"""
     {hair_svg(x, y, opacity)}
@@ -344,13 +394,12 @@ def rabbit_head(x: int, y: int, opacity: float) -> str:
       <polygon points="{star_points(x+4, y+42, 12, 5)}" fill="#ffd23f"/>
     </g>
     <path d="{face_path(x, y)}" fill="none" stroke="#111827" stroke-width="6" opacity="{opacity}"/>
-    <path d="M{x-42},{y+12} L{x-12},{y+12}" stroke="#111827" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
-    <path d="M{x+16},{y+12} L{x+46},{y+12}" stroke="#111827" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
-    <path d="M{x-34},{y+58} Q{x},{y+72} {x+34},{y+58}" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
+    {eye_svg(x-28, x+32, y+12, opacity, blink, "#111827")}
+    {mouth_svg(x, y, opacity, mouth_open, "#ffffff")}
     """
 
 
-def camel_head(x: int, y: int, opacity: float) -> str:
+def camel_head(x: int, y: int, opacity: float, mouth_open: bool, blink: bool) -> str:
     clip = f"camelClip{x}"
     return f"""
     {hair_svg(x, y, opacity, "#f4f4f5")}
@@ -363,13 +412,12 @@ def camel_head(x: int, y: int, opacity: float) -> str:
       <path d="M{x+76},{y+20} L{x+48},{y+42}" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
     </g>
     <path d="{face_path(x, y)}" fill="none" stroke="#111827" stroke-width="6" opacity="{opacity}"/>
-    <circle cx="{x-34}" cy="{y+4}" r="11" fill="#ffffff" opacity="{opacity}"/>
-    <circle cx="{x+34}" cy="{y+4}" r="11" fill="#ffffff" opacity="{opacity}"/>
-    <path d="M{x-36},{y+58} Q{x},{y+72} {x+36},{y+58}" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
+    {eye_svg(x-34, x+34, y+4, opacity, blink, "#ffffff")}
+    {mouth_svg(x, y, opacity, mouth_open, "#ffffff")}
     """
 
 
-def eagle_head(x: int, y: int, opacity: float) -> str:
+def eagle_head(x: int, y: int, opacity: float, mouth_open: bool, blink: bool) -> str:
     clip = f"eagleClip{x}"
     stripes = []
     for index in range(8):
@@ -391,17 +439,16 @@ def eagle_head(x: int, y: int, opacity: float) -> str:
     <rect x="{x-76}" y="{y-14}" width="62" height="36" rx="8" fill="#111827" opacity="{opacity}"/>
     <rect x="{x+14}" y="{y-14}" width="62" height="36" rx="8" fill="#111827" opacity="{opacity}"/>
     <line x1="{x-14}" y1="{y+4}" x2="{x+14}" y2="{y+4}" stroke="#111827" stroke-width="8" opacity="{opacity}"/>
-    <path d="M{x-34},{y+68} Q{x+8},{y+86} {x+52},{y+68}" fill="none" stroke="#111827" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
+    {mouth_svg(x+8, y+8, opacity, mouth_open, "#111827")}
     """
 
 
-def generic_head(x: int, y: int, color: str, opacity: float) -> str:
+def generic_head(x: int, y: int, color: str, opacity: float, mouth_open: bool, blink: bool) -> str:
     return f"""
     {hair_svg(x, y, opacity)}
     <path d="{face_path(x, y)}" fill="{color}" stroke="#111827" stroke-width="6" opacity="{opacity}"/>
-    <circle cx="{x-38}" cy="{y+4}" r="13" fill="#ffffff" opacity="{opacity}"/>
-    <circle cx="{x+38}" cy="{y+4}" r="13" fill="#ffffff" opacity="{opacity}"/>
-    <path d="M{x-36},{y+58} Q{x},{y+72} {x+36},{y+58}" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="{opacity}"/>
+    {eye_svg(x-38, x+38, y+4, opacity, blink, "#ffffff")}
+    {mouth_svg(x, y, opacity, mouth_open, "#ffffff")}
     """
 
 
@@ -414,6 +461,7 @@ def render_svg(
     total: int,
     start_sec: float,
     duration_sec: float,
+    motion_time: float = 0.0,
 ) -> str:
     speaker_id = line.get("speaker", "")
     task = tasks.get(line.get("task"), next(iter(tasks.values())))
@@ -437,7 +485,8 @@ def render_svg(
     character_groups = []
     for pos_index, char_id in enumerate(ordered_ids[:4]):
         x = x_positions.get(char_id, fallback_positions[min(pos_index, len(fallback_positions) - 1)])
-        character_groups.append(character_svg(characters[char_id], x, 500, char_id == speaker_id))
+        motion = character_motion(char_id, char_id == speaker_id, motion_time, index + pos_index)
+        character_groups.append(character_svg(characters[char_id], x, 500, char_id == speaker_id, motion))
 
     style = data.get("style", "国拟人对话")
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}">
@@ -597,6 +646,79 @@ def render_segment(frame_png: Path, audio_wav: Path, duration_sec: float, segmen
         ],
         quiet=True,
     )
+
+
+def render_animated_segment(
+    data: dict[str, Any],
+    characters: dict[str, dict[str, Any]],
+    tasks: dict[str, dict[str, Any]],
+    line: dict[str, Any],
+    index: int,
+    total: int,
+    start_sec: float,
+    duration_sec: float,
+    audio_wav: Path,
+    frame_dir: Path,
+    segment_mp4: Path,
+    animation_fps: int,
+    keep_svg: bool,
+) -> Path:
+    frame_dir.mkdir(parents=True, exist_ok=True)
+    segment_mp4.parent.mkdir(parents=True, exist_ok=True)
+    frame_count = max(1, int(math.ceil(duration_sec * animation_fps)))
+    first_png = frame_dir / "frame-0000.png"
+
+    for frame_index in range(frame_count):
+        svg_path = frame_dir / f"frame-{frame_index:04d}.svg"
+        png_path = frame_dir / f"frame-{frame_index:04d}.png"
+        svg = render_svg(
+            data,
+            characters,
+            tasks,
+            line,
+            index,
+            total,
+            start_sec,
+            duration_sec,
+            motion_time=frame_index / animation_fps,
+        )
+        svg_path.write_text(svg, encoding="utf-8")
+        convert_svg_to_png(svg_path, png_path)
+        if not keep_svg:
+            svg_path.unlink(missing_ok=True)
+
+    run(
+        [
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-framerate",
+            str(animation_fps),
+            "-i",
+            str(frame_dir / "frame-%04d.png"),
+            "-i",
+            str(audio_wav),
+            "-t",
+            f"{duration_sec:.3f}",
+            "-r",
+            str(FPS),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "160k",
+            str(segment_mp4),
+        ],
+        quiet=True,
+    )
+    return first_png
 
 
 def concat_segments(segments: list[Path], output_mp4: Path) -> None:
@@ -760,12 +882,16 @@ def main() -> None:
     parser.add_argument("--reuse-audio", action="store_true", help="Reuse existing generated audio files when present")
     parser.add_argument("--say-rate", type=int, default=178, help="macOS say speaking rate")
     parser.add_argument("--keep-svg", action="store_true", help="Keep intermediate SVG frames")
+    parser.add_argument("--static", action="store_true", help="Render still-image segments instead of animated frames")
+    parser.add_argument("--animation-fps", type=int, default=8, help="Generated animation frames per second")
     args = parser.parse_args()
 
     for binary in ("ffmpeg", "ffprobe", "sips"):
         require_binary(binary)
     if args.voice_engine == "say":
         require_binary("say")
+    if args.animation_fps < 1:
+        raise SystemExit("--animation-fps must be at least 1")
 
     input_path = Path(args.input).expanduser().resolve()
     data = load_json(input_path)
@@ -851,13 +977,31 @@ def main() -> None:
             duration = max(planned, raw_duration + 0.35)
             normalize_audio(raw_audio, wav_audio, duration)
 
-        svg = render_svg(data, characters, tasks, line, index, len(lines), current_start, duration)
-        svg_frame.parent.mkdir(parents=True, exist_ok=True)
-        svg_frame.write_text(svg, encoding="utf-8")
-        convert_svg_to_png(svg_frame, png_frame)
-        if not args.keep_svg:
-            svg_frame.unlink(missing_ok=True)
-        render_segment(png_frame, wav_audio, duration, segment)
+        if args.static:
+            svg = render_svg(data, characters, tasks, line, index, len(lines), current_start, duration)
+            svg_frame.parent.mkdir(parents=True, exist_ok=True)
+            svg_frame.write_text(svg, encoding="utf-8")
+            convert_svg_to_png(svg_frame, png_frame)
+            if not args.keep_svg:
+                svg_frame.unlink(missing_ok=True)
+            frame_file = png_frame
+            render_segment(png_frame, wav_audio, duration, segment)
+        else:
+            frame_file = render_animated_segment(
+                data,
+                characters,
+                tasks,
+                line,
+                index,
+                len(lines),
+                current_start,
+                duration,
+                wav_audio,
+                frames_dir / f"line-{index + 1:02d}-anim",
+                segment,
+                args.animation_fps,
+                args.keep_svg,
+            )
 
         timings.append(
             {
@@ -868,7 +1012,7 @@ def main() -> None:
                 "startSec": round(current_start, 3),
                 "durationSec": round(duration, 3),
                 "audioFile": str(wav_audio.relative_to(base_dir)),
-                "frameFile": str(png_frame.relative_to(base_dir)),
+                "frameFile": str(frame_file.relative_to(base_dir)),
                 "text": text,
             }
         )
@@ -885,6 +1029,8 @@ def main() -> None:
         "style": data.get("style", "国拟人对话"),
         "targetDurationSec": data.get("targetDurationSec", 180),
         "actualDurationSec": round(actual_duration, 3),
+        "animated": not args.static,
+        "animationFps": args.animation_fps if not args.static else None,
         "voiceEngine": args.voice_engine,
         "vibevoiceSeed": args.vibevoice_seed if args.voice_engine == "voice-tts" else None,
         "vibevoiceCfgScale": args.vibevoice_cfg_scale if args.voice_engine == "voice-tts" else None,
