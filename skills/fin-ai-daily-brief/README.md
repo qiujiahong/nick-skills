@@ -2,7 +2,7 @@
 
 面向金融企业的 AI 资讯日报 skill。
 
-这个版本按你的要求调整为 **Google 搜索优先** 的工作流；当无法直接拿到 Google 结果时，回退搜索会优先抓取**最近 7 天**的金融 AI 新闻，并在结果过少时自动放宽站点限制：
+这个版本按你的要求调整为 **Google 搜索优先且必须使用 Google 结果输入** 的工作流：
 
 1. 打开 `https://www.google.com/`
 2. 搜索 `金融 AI`
@@ -88,17 +88,17 @@ python3 scripts/generate_fin_ai_brief.py \
   --send-email
 ```
 
-### B. 没有 Google 结果 JSON 时，回退到 Tavily 搜索（默认优先最近 7 天新闻）
+### B. 必须提供 Google 结果 JSON
 
 ```bash
 python3 scripts/generate_fin_ai_brief.py \
   --query "金融 AI" \
-  --topic news \
+  --input-results ./output/google-results.json \
   --output-dir ./output \
   --send-email
 ```
 
-> 当前版本会优先搜最近 7 天新闻；如果严格站点过滤下结果过少，会自动放宽域名限制，再补一轮最近 7 天搜索，以提高命中量。
+> 当前版本不再走 Tavily / 通用回退搜索；必须由浏览器先拿到 Google 前 15 条自然结果，再交给脚本生成简报。
 
 ## 输出产物
 

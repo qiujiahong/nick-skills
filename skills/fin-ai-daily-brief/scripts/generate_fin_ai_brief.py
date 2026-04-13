@@ -285,6 +285,21 @@ def load_input_results(path: Path, limit: int = DEFAULT_CANDIDATE_LIMIT) -> List
     return output
 
 
+def load_google_results(input_results: str, candidate_limit: int = DEFAULT_CANDIDATE_LIMIT) -> tuple[list[dict], dict]:
+    if not input_results:
+        raise RuntimeError("Google search workflow requires --input-results from browser-extracted Google results")
+    input_path = Path(input_results)
+    raw_items = load_input_results(input_path, limit=candidate_limit)
+    search_result = {
+        "ok": True,
+        "query": DEFAULT_QUERY,
+        "source": "google-browser",
+        "input_results": str(input_path.resolve()),
+        "response": {"results": raw_items},
+    }
+    return raw_items, search_result
+
+
 def tavily_search(query: str, topic: str, max_results: int, country: str = "", include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None, days: int = 7) -> dict:
     if not TAVILY_SEARCH_SCRIPT.exists():
         raise RuntimeError(f"tavily-search script not found: {TAVILY_SEARCH_SCRIPT}")
@@ -748,24 +763,8 @@ def main() -> int:
     if args.subscribers_file:
         os.environ["FIN_AI_SUBSCRIBERS_FILE"] = args.subscribers_file
 
-    if args.input_results:
-        input_path = Path(args.input_results)
-        raw_items = load_input_results(input_path, limit=args.candidate_limit)
-        search_result = {
-            "ok": True,
-            "query": args.query,
-            "source": "google-browser",
-            "input_results": str(input_path.resolve()),
-            "response": {"results": raw_items},
-        }
-    else:
-        include_domains = args.include_domain or DEFAULT_INCLUDE_DOMAINS
-        exclude_domains = args.exclude_domain or DEFAULT_EXCLUDE_DOMAINS
-        search_result = multi_search(args.query, args.topic, args.top_k, country=args.country, include_domains=include_domains, exclude_domains=exclude_domains)
-        if not search_result.get("ok"):
-            print(json.dumps(search_result, ensure_ascii=False, indent=2), file=sys.stderr)
-            return 1
-        raw_items = dedupe_items(search_result.get("response", {}).get("results", []))[: args.candidate_limit]
+    raw_items, search_result = load_google_results(args.input_results, candidate_limit=args.candidate_limit)
+    search_result["query"] = args.query
 
     (out_dir / "search-result.json").write_text(json.dumps(search_result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

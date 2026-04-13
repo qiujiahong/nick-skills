@@ -81,9 +81,9 @@ FIN_AI_SUBSCRIBERS=qiujiahongde@163.com
 - 忽略 `type=ai_overview / sponsored / ad` 的结果
 - 过滤 Google 自己的跳转 / 广告链接
 
-#### 回退：Tavily 搜索
+#### Google 结果输入（必需）
 
-如果暂时拿不到 Google JSON，也可用 Tavily 回退验证；默认优先搜索最近 7 天新闻，并在站点过滤过严导致结果太少时自动放宽域名限制：
+必须先在 agent/browser 环境中把 Google 前 15 条自然结果整理成 JSON，再喂给脚本：
 
 - `TAVILY_API_KEYS` 或 `TAVILY_API_KEY`
 - `TAVILY_SEARCH_BASE_URL`
@@ -111,12 +111,12 @@ python3 scripts/generate_fin_ai_brief.py \
   --send-email
 ```
 
-### 方式 3：没有 Google JSON 时使用 Tavily 回退
+### 方式 3：Google-only 执行要求
 
 ```bash
 python3 scripts/generate_fin_ai_brief.py \
   --query "金融 AI" \
-  --topic news \
+  --input-results ./output/google-results.json \
   --output-dir ./output \
   --send-email
 ```

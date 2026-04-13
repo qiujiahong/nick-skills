@@ -91,66 +91,9 @@ class FinAiDailyBriefTests(unittest.TestCase):
         self.assertEqual(loaded[0]["title"], "生成式 AI 在银行业中的应用")
         self.assertEqual(loaded[0]["summary"], "中文摘要")
 
-    def test_build_search_plans_include_recent_7_day_news_fallbacks(self):
-        plans = module.build_search_plans(
-            primary_query="金融 AI",
-            requested_topic="general",
-            include_domains=["example.com"],
-            exclude_domains=["bad.com"],
-        )
-
-        self.assertEqual(plans[0]["topic"], "general")
-        self.assertEqual(plans[0]["include_domains"], ["example.com"])
-        self.assertTrue(any(plan["topic"] == "news" and plan["days"] == 7 for plan in plans))
-        self.assertTrue(any(plan["topic"] == "news" and not plan["include_domains"] for plan in plans))
-
-    def test_multi_search_falls_back_to_broader_recent_news_when_strict_search_is_sparse(self):
-        calls = []
-        original = module.tavily_search
-
-        def fake_tavily_search(query, topic, max_results, country="", include_domains=None, exclude_domains=None, days=7):
-            calls.append(
-                {
-                    "query": query,
-                    "topic": topic,
-                    "include_domains": include_domains or [],
-                    "days": days,
-                }
-            )
-            if topic == "general":
-                return {"ok": True, "response": {"results": []}}
-            if topic == "news" and include_domains:
-                return {"ok": True, "response": {"results": []}}
-            return {
-                "ok": True,
-                "response": {
-                    "results": [
-                        {
-                            "title": f"结果 {i}",
-                            "url": f"https://example.com/{i}",
-                            "summary": f"最近7天金融AI资讯 {i}",
-                            "source": "example.com",
-                        }
-                        for i in range(12)
-                    ]
-                },
-            }
-
-        module.tavily_search = fake_tavily_search
-        try:
-            result = module.multi_search(
-                primary_query="金融 AI",
-                topic="general",
-                target_count=10,
-                include_domains=["example.com"],
-                exclude_domains=["bad.com"],
-            )
-        finally:
-            module.tavily_search = original
-
-        self.assertTrue(result["ok"])
-        self.assertGreaterEqual(len(result["response"]["results"]), 10)
-        self.assertTrue(any(call["topic"] == "news" and not call["include_domains"] for call in calls))
+    def test_load_google_results_requires_input_file(self):
+        with self.assertRaises(RuntimeError):
+            module.load_google_results("", candidate_limit=15)
 
     def test_build_html_renders_google_candidates_and_selected_sections(self):
         selected = [
