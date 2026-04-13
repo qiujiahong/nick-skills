@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -45,7 +46,7 @@ class FinAiDailyBriefTests(unittest.TestCase):
             ],
         )
 
-    def test_load_input_results_limits_google_candidates_to_first_15(self):
+    def test_load_input_results_limits_candidates_to_first_15(self):
         payload = {
             "query": "金融 AI",
             "results": [
@@ -60,7 +61,7 @@ class FinAiDailyBriefTests(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            input_path = Path(tmpdir) / "google-results.json"
+            input_path = Path(tmpdir) / "results.json"
             input_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
             loaded = module.load_input_results(input_path, limit=15)
 
@@ -84,18 +85,37 @@ class FinAiDailyBriefTests(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            input_path = Path(tmpdir) / "google-results.json"
+            input_path = Path(tmpdir) / "results.json"
             input_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
             loaded = module.load_input_results(input_path, limit=15)
 
         self.assertEqual(loaded[0]["title"], "生成式 AI 在银行业中的应用")
         self.assertEqual(loaded[0]["summary"], "中文摘要")
 
-    def test_load_google_results_requires_input_file(self):
-        with self.assertRaises(RuntimeError):
-            module.load_google_results("", candidate_limit=15)
+    def test_load_search_results_uses_tavily_when_no_input_file(self):
+        fake_search = {
+            "ok": True,
+            "query": "金融 AI",
+            "topic": "news",
+            "response": {
+                "results": [
+                    {
+                        "title": "某银行落地 AI 风控",
+                        "url": "https://example.com/a",
+                        "content": "银行在风控流程中引入 AI 提升审批效率。",
+                        "published_date": "2026-04-14",
+                    }
+                ]
+            },
+        }
+        with patch.object(module, "multi_search", return_value=fake_search):
+            loaded, search_result = module.load_search_results("", "金融 AI", "news", candidate_limit=15)
 
-    def test_build_html_renders_google_candidates_and_selected_sections(self):
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0]["title"], "某银行落地 AI 风控")
+        self.assertEqual(search_result["topic"], "news")
+
+    def test_build_html_renders_tavily_candidates_and_selected_sections(self):
         selected = [
             {
                 "title": "某银行部署 AI 风控",
@@ -108,8 +128,8 @@ class FinAiDailyBriefTests(unittest.TestCase):
         ]
         candidates = [
             {
-                "title": "Google 候选资讯",
-                "summary": "来自 Google 前 15 条结果。",
+                "title": "Tavily 候选资讯",
+                "summary": "来自 Tavily 前 15 条结果。",
                 "url": "https://example.com/candidate",
                 "source": "example.com",
                 "published_date": "2026-04-13",
@@ -126,9 +146,9 @@ class FinAiDailyBriefTests(unittest.TestCase):
             search_query="金融 AI",
         )
 
-        self.assertIn("Google 前 15 条结果", html)
+        self.assertIn("Tavily 搜索前 15 条结果", html)
         self.assertIn("精选 10 条高价值资讯", html)
-        self.assertIn("Google 候选资讯", html)
+        self.assertIn("Tavily 候选资讯", html)
         self.assertIn("某银行部署 AI 风控", html)
         self.assertIn("金融 AI", html)
 

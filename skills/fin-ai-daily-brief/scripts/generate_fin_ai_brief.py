@@ -11,6 +11,7 @@ import ssl
 import subprocess
 import sys
 from email.mime.multipart import MIMEMultipart
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -217,6 +218,46 @@ def hostname_from_url(url: str) -> str:
     return (match.group(1).lower() if match else "").replace("www.", "")
 
 
+def canonicalize_url(url: str) -> str:
+    raw = normalize_text(url)
+    if not raw:
+        return ""
+    try:
+        parts = urlsplit(raw)
+    except Exception:
+        return raw
+    path = parts.path or "/"
+    if path != "/" and path.endswith("/"):
+        path = path[:-1]
+    kept = []
+    for key, value in parse_qsl(parts.query, keep_blank_values=False):
+        if key.lower().startswith(("utm_", "spm", "from", "feature", "ref", "mod", "loc", "r", "rfunc", "tj", "tr", "cre")):
+            continue
+        kept.append((key, value))
+    query = urlencode(kept)
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, query, ""))
+
+
+def looks_like_low_value_page(item: dict) -> bool:
+    title = normalize_text(item.get("title") or "").lower()
+    summary = normalize_text(item.get("summary") or item.get("content") or "").lower()
+    url = canonicalize_url(item.get("url") or "")
+    host = hostname_from_url(url)
+    path = urlsplit(url).path.lower() if url else ""
+    text = f"{title} {summary} {host} {path}"
+
+    blocked_terms = [
+        "财经门户", "门户", "首页", "index.html", "查看pdf原文", "招募说明书", "基金更新", "基金管理人", "基金托管人", "公告", "pdf原文", "产品经理", "营收", "财报", "股吧", "博客"
+    ]
+    if any(term.lower() in text for term in blocked_terms):
+        return True
+    if path in {"", "/", "/index.html", "/index.htm"}:
+        return True
+    if "gonggao" in path or "fund" in host:
+        return True
+    return False
+
+
 def summarize_item(item: dict) -> str:
     content = normalize_text(item.get("summary") or item.get("content") or item.get("raw_content") or "")
     if not content:
@@ -234,13 +275,16 @@ def dedupe_items(items: List[dict]) -> List[dict]:
     seen = set()
     output = []
     for item in items:
-        url = normalize_text(item.get("url") or "")
+        url = canonicalize_url(item.get("url") or "")
         title = normalize_text(item.get("title") or "")
         key = url.lower() or title.lower()
         if not key or key in seen:
             continue
         seen.add(key)
-        output.append(item)
+        cloned = dict(item)
+        if url:
+            cloned["url"] = url
+        output.append(cloned)
     return output
 
 
@@ -254,14 +298,14 @@ def normalize_result_item(item: dict) -> Optional[dict]:
         return None
 
     title = normalize_text(item.get("zh_title") or item.get("title") or item.get("headline") or "")
-    url = normalize_text(item.get("url") or item.get("link") or "")
+    url = canonicalize_url(item.get("url") or item.get("link") or "")
     if not title or not url:
         return None
     if "/aclk?" in url or url.startswith("https://www.google.com/"):
         return None
 
     summary = normalize_text(item.get("zh_summary") or item.get("summary") or item.get("snippet") or item.get("content") or item.get("raw_content") or "")
-    return {
+    candidate = {
         "title": title,
         "url": url,
         "summary": summary,
@@ -269,6 +313,9 @@ def normalize_result_item(item: dict) -> Optional[dict]:
         "published_date": normalize_text(item.get("published_date") or item.get("date") or ""),
         "source": normalize_text(item.get("source") or hostname_from_url(url) or "unknown"),
     }
+    if looks_like_low_value_page(candidate):
+        return None
+    return candidate
 
 
 def load_input_results(path: Path, limit: int = DEFAULT_CANDIDATE_LIMIT) -> List[dict]:
@@ -285,19 +332,46 @@ def load_input_results(path: Path, limit: int = DEFAULT_CANDIDATE_LIMIT) -> List
     return output
 
 
+def load_search_results(input_results: str, query: str, topic: str, candidate_limit: int = DEFAULT_CANDIDATE_LIMIT) -> tuple[list[dict], dict]:
+    if input_results:
+        input_path = Path(input_results)
+        raw_items = load_input_results(input_path, limit=candidate_limit)
+        search_result = {
+            "ok": True,
+            "query": query,
+            "topic": topic,
+            "source": "input-results",
+            "input_results": str(input_path.resolve()),
+            "response": {"results": raw_items},
+        }
+        return raw_items, search_result
+
+    search_result = multi_search(
+        primary_query=query,
+        topic=topic,
+        target_count=max(candidate_limit, DEFAULT_TOP_K),
+        country=DEFAULT_COUNTRY,
+        include_domains=DEFAULT_INCLUDE_DOMAINS,
+        exclude_domains=DEFAULT_EXCLUDE_DOMAINS,
+    )
+    if not search_result.get("ok"):
+        raise RuntimeError(f"tavily-search failed: {json.dumps(search_result, ensure_ascii=False)}")
+    raw_items = []
+    for item in search_result.get("response", {}).get("results", []):
+        normalized = normalize_result_item(item) or normalize_result_item({
+            "title": item.get("title"),
+            "url": item.get("url"),
+            "summary": item.get("content") or item.get("raw_content") or item.get("summary") or "",
+            "published_date": item.get("published_date") or item.get("date") or "",
+            "source": item.get("source") or hostname_from_url(item.get("url") or ""),
+        })
+        if normalized:
+            raw_items.append(normalized)
+    return raw_items[:candidate_limit], search_result
+
+
 def load_google_results(input_results: str, candidate_limit: int = DEFAULT_CANDIDATE_LIMIT) -> tuple[list[dict], dict]:
-    if not input_results:
-        raise RuntimeError("Google search workflow requires --input-results from browser-extracted Google results")
-    input_path = Path(input_results)
-    raw_items = load_input_results(input_path, limit=candidate_limit)
-    search_result = {
-        "ok": True,
-        "query": DEFAULT_QUERY,
-        "source": "google-browser",
-        "input_results": str(input_path.resolve()),
-        "response": {"results": raw_items},
-    }
-    return raw_items, search_result
+    return load_search_results(input_results=input_results, query=DEFAULT_QUERY, topic=DEFAULT_TOPIC, candidate_limit=candidate_limit)
 
 
 def tavily_search(query: str, topic: str, max_results: int, country: str = "", include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None, days: int = 7) -> dict:
@@ -524,17 +598,20 @@ def is_relevant_fin_ai_item(item: dict) -> bool:
 
 
 def build_candidate_items(items: List[dict], limit: int = DEFAULT_CANDIDATE_LIMIT) -> List[dict]:
-    candidates = []
-    for item in items[:limit]:
-        candidates.append({
+    enriched = []
+    for item in items:
+        if looks_like_low_value_page(item):
+            continue
+        enriched.append({
             "title": normalize_text(item.get("title") or "未命名资讯"),
             "summary": normalize_text(item.get("summary") or summarize_item(item)),
-            "url": normalize_text(item.get("url") or ""),
+            "url": canonicalize_url(item.get("url") or ""),
             "source": normalize_text(item.get("source") or hostname_from_url(item.get("url") or "") or "unknown"),
             "published_date": item.get("published_date") or "",
             "score": score_item(item),
         })
-    return candidates
+    enriched.sort(key=lambda x: (x["score"], x["published_date"]), reverse=True)
+    return enriched[:limit]
 
 
 def select_top_items(items: List[dict], keep: int) -> List[dict]:
@@ -577,7 +654,7 @@ def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[
     for idx, item in enumerate(candidate_items or [], start=1):
         candidate_cards.append(f"""
         <section class=\"card candidate\">
-          <div class=\"meta\">Google #{idx} · {html.escape(item['source'])}</div>
+          <div class=\"meta\">Tavily #{idx} · {html.escape(item['source'])}</div>
           <h3><a href=\"{html.escape(item['url'])}\" target=\"_blank\">{html.escape(item['title'])}</a></h3>
           <p>{html.escape(item['summary'])}</p>
           <div class=\"link\"><a href=\"{html.escape(item['url'])}\" target=\"_blank\">查看原文</a></div>
@@ -638,8 +715,8 @@ def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[
       {query_badge}
     </div>
 
-    <h2 class=\"section-title\">Google 前 15 条结果</h2>
-    <div class=\"section-note\">已忽略赞助商结果与 AI 概览，仅保留可读网页结果。</div>
+    <h2 class=\"section-title\">Tavily 搜索前 15 条结果</h2>
+    <div class=\"section-note\">按 Tavily 搜索结果保留前 15 条候选，并过滤广告/低价值页面。</div>
     <div class=\"grid\">{''.join(candidate_cards)}</div>
 
     <h2 class=\"section-title\">精选 10 条高价值资讯</h2>
@@ -660,7 +737,7 @@ def build_text(date_str: str, overview: str, items: List[dict], fun_facts: List[
     lines = [f"金融 AI 资讯简报 - {date_str}", ""]
     if search_query:
         lines.extend([f"搜索词：{search_query}", ""])
-    lines.extend(["总览：", overview, "", "Google 前 15 条结果："])
+    lines.extend(["总览：", overview, "", "Tavily 搜索前 15 条结果："])
     for idx, item in enumerate(candidate_items or [], start=1):
         lines.extend([
             f"{idx}. {item['title']}",
@@ -749,7 +826,7 @@ def main() -> int:
     parser.add_argument("--include-domain", action="append", default=[])
     parser.add_argument("--exclude-domain", action="append", default=[])
     parser.add_argument("--output-dir", default="./output")
-    parser.add_argument("--input-results", default="")
+    parser.add_argument("--input-results", default="", help="Optional pre-collected results JSON; omit to search via tavily-search")
     parser.add_argument("--candidate-limit", type=int, default=DEFAULT_CANDIDATE_LIMIT)
     parser.add_argument("--recipient", action="append", default=[])
     parser.add_argument("--subscribers-file", default="")
@@ -763,8 +840,7 @@ def main() -> int:
     if args.subscribers_file:
         os.environ["FIN_AI_SUBSCRIBERS_FILE"] = args.subscribers_file
 
-    raw_items, search_result = load_google_results(args.input_results, candidate_limit=args.candidate_limit)
-    search_result["query"] = args.query
+    raw_items, search_result = load_search_results(args.input_results, args.query, args.topic, candidate_limit=args.candidate_limit)
 
     (out_dir / "search-result.json").write_text(json.dumps(search_result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -772,7 +848,8 @@ def main() -> int:
     candidate_items = build_candidate_items(deduped, limit=args.candidate_limit)
     filtered = [item for item in deduped if is_relevant_fin_ai_item(item)]
     if len(filtered) < args.keep:
-        filtered = deduped
+        fallback_pool = [item for item in deduped if not looks_like_low_value_page(item)]
+        filtered = fallback_pool or deduped
     selected = select_top_items(filtered, args.keep)
 
     overview = build_overview(selected, args.date, args.query)
