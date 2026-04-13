@@ -22,7 +22,7 @@ REPO_ROOT = SKILL_DIR.parent.parent
 TAVILY_SEARCH_SCRIPT = REPO_ROOT / "skills" / "tavily-search" / "scripts" / "tavily_search.py"
 
 DEFAULT_QUERY = "金融 AI"
-DEFAULT_TOPIC = "general"
+DEFAULT_TOPIC = "news"
 DEFAULT_TOP_K = 20
 DEFAULT_KEEP = 10
 DEFAULT_CANDIDATE_LIMIT = 15
@@ -59,6 +59,11 @@ DEFAULT_QUERY_VARIANTS = [
     "中文 银行 大模型 客服 风控 智能运营",
     "中文 券商 AI 研究 投顾 合规 风控",
     "中文 资管 基金 AI 投研 风险管理",
+]
+RECENT_QUERY_SUFFIXES = [
+    "最近7天",
+    "近7日",
+    "本周",
 ]
 MIN_SELECTED_ITEMS = 3
 MIN_SCORE_TO_KEEP = 18
@@ -280,7 +285,7 @@ def load_input_results(path: Path, limit: int = DEFAULT_CANDIDATE_LIMIT) -> List
     return output
 
 
-def tavily_search(query: str, topic: str, max_results: int, country: str = "", include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None) -> dict:
+def tavily_search(query: str, topic: str, max_results: int, country: str = "", include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None, days: int = 7) -> dict:
     if not TAVILY_SEARCH_SCRIPT.exists():
         raise RuntimeError(f"tavily-search script not found: {TAVILY_SEARCH_SCRIPT}")
 
@@ -296,7 +301,7 @@ def tavily_search(query: str, topic: str, max_results: int, country: str = "", i
         "--exclude-domains", ",".join(exclude_domains or []),
     ]
     if topic == "news":
-        cmd += ["--days", "7"]
+        cmd += ["--days", str(days)]
 
     proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(REPO_ROOT), env=os.environ.copy())
     stdout = (proc.stdout or "").strip()
@@ -315,29 +320,86 @@ def tavily_search(query: str, topic: str, max_results: int, country: str = "", i
         result["include_domains"] = include_domains
     if exclude_domains:
         result["exclude_domains"] = exclude_domains
+    if topic == "news":
+        result["days"] = days
     return result
 
 
-def multi_search(primary_query: str, topic: str, target_count: int, country: str = "", include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None) -> dict:
+def build_query_variants(primary_query: str, topic: str) -> List[str]:
     queries = [primary_query] + [q for q in DEFAULT_QUERY_VARIANTS if q != primary_query]
+    if topic == "news":
+        extra = []
+        for query in queries:
+            for suffix in RECENT_QUERY_SUFFIXES:
+                candidate = f"{query} {suffix}".strip()
+                if candidate not in queries and candidate not in extra:
+                    extra.append(candidate)
+        queries.extend(extra)
+    return queries
+
+
+def build_search_plans(primary_query: str, requested_topic: str, include_domains: Optional[List[str]], exclude_domains: Optional[List[str]], recent_days: int = 7) -> List[dict]:
+    plans = []
+
+    def add_plan(topic: str, include: Optional[List[str]], label: str) -> None:
+        plan = {
+            "topic": topic,
+            "include_domains": include or [],
+            "exclude_domains": exclude_domains or [],
+            "days": recent_days if topic == "news" else 0,
+            "label": label,
+            "queries": build_query_variants(primary_query, topic),
+        }
+        key = (plan["topic"], tuple(plan["include_domains"]), tuple(plan["exclude_domains"]), plan["days"])
+        existing_keys = {
+            (p["topic"], tuple(p["include_domains"]), tuple(p["exclude_domains"]), p["days"])
+            for p in plans
+        }
+        if key not in existing_keys:
+            plans.append(plan)
+
+    add_plan(requested_topic, include_domains, "requested-strict")
+    if requested_topic != "news":
+        add_plan("news", include_domains, "recent-news-strict")
+    add_plan("news", [], "recent-news-broad")
+    if requested_topic != "general":
+        add_plan("general", include_domains, "general-strict")
+    add_plan("general", [], "general-broad")
+    return plans
+
+
+def multi_search(primary_query: str, topic: str, target_count: int, country: str = "", include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None) -> dict:
     all_results = []
     search_runs = []
     per_query = max(6, min(10, target_count))
+    plans = build_search_plans(primary_query, topic, include_domains, exclude_domains, recent_days=7)
 
-    for query in queries:
-        result = tavily_search(query, topic, per_query, country=country, include_domains=include_domains, exclude_domains=exclude_domains)
-        search_runs.append(result)
-        if result.get("ok"):
-            for item in result.get("response", {}).get("results", []):
-                normalized = normalize_result_item(item) or normalize_result_item({
-                    "title": item.get("title"),
-                    "url": item.get("url"),
-                    "summary": item.get("content") or item.get("raw_content") or "",
-                    "published_date": item.get("published_date") or "",
-                    "source": hostname_from_url(item.get("url") or ""),
-                })
-                if normalized:
-                    all_results.append(normalized)
+    for plan in plans:
+        for query in plan["queries"]:
+            result = tavily_search(
+                query,
+                plan["topic"],
+                per_query,
+                country=country,
+                include_domains=plan["include_domains"],
+                exclude_domains=plan["exclude_domains"],
+                days=plan["days"] or 7,
+            )
+            result["plan_label"] = plan["label"]
+            search_runs.append(result)
+            if result.get("ok"):
+                for item in result.get("response", {}).get("results", []):
+                    normalized = normalize_result_item(item) or normalize_result_item({
+                        "title": item.get("title"),
+                        "url": item.get("url"),
+                        "summary": item.get("content") or item.get("raw_content") or "",
+                        "published_date": item.get("published_date") or "",
+                        "source": hostname_from_url(item.get("url") or ""),
+                    })
+                    if normalized:
+                        all_results.append(normalized)
+            if len(dedupe_items(all_results)) >= target_count * 2:
+                break
         if len(dedupe_items(all_results)) >= target_count * 2:
             break
 

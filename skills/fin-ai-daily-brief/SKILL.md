@@ -83,7 +83,7 @@ FIN_AI_SUBSCRIBERS=qiujiahongde@163.com
 
 #### 回退：Tavily 搜索
 
-如果暂时拿不到 Google JSON，也可用 Tavily 回退验证：
+如果暂时拿不到 Google JSON，也可用 Tavily 回退验证；默认优先搜索最近 7 天新闻，并在站点过滤过严导致结果太少时自动放宽域名限制：
 
 - `TAVILY_API_KEYS` 或 `TAVILY_API_KEY`
 - `TAVILY_SEARCH_BASE_URL`
@@ -116,6 +116,7 @@ python3 scripts/generate_fin_ai_brief.py \
 ```bash
 python3 scripts/generate_fin_ai_brief.py \
   --query "金融 AI" \
+  --topic news \
   --output-dir ./output \
   --send-email
 ```
