@@ -259,6 +259,40 @@ def looks_like_low_value_page(item: dict) -> bool:
     return False
 
 
+def translate_title_for_cn(title: str) -> str:
+    raw = normalize_text(title)
+    if not raw or contains_chinese(raw):
+        return raw
+    lowered = raw.lower()
+    translations = [
+        ("fintech startup", "金融科技公司"),
+        ("startup", "创业公司"),
+        ("raises", "获融资"),
+        ("million", "百万美元"),
+        ("billion", "十亿美元"),
+        ("bank", "银行"),
+        ("banks", "银行"),
+        ("banking", "银行业"),
+        ("compliance", "合规"),
+        ("risk", "风控"),
+        ("underwriting", "承保"),
+        ("customer onboarding", "客户准入"),
+        ("customer service", "客服"),
+        ("agent", "智能体"),
+        ("agents", "智能体"),
+        ("AI", "AI"),
+        ("chatbot", "聊天机器人"),
+        ("data center financing", "数据中心融资"),
+    ]
+    hits = []
+    for src, dst in translations:
+        if src.lower() in lowered and dst not in hits:
+            hits.append(dst)
+    if hits:
+        return " / ".join(hits[:4]) + "｜" + raw
+    return "中文摘要｜" + raw
+
+
 def shorten_summary(text: str, max_chars: int = 80) -> str:
     content = normalize_text(text)
     if not content:
@@ -279,11 +313,42 @@ def shorten_summary(text: str, max_chars: int = 80) -> str:
     for key, value in replacements.items():
         if key in lowered and value not in summary_parts:
             summary_parts.append(value)
-    if summary_parts:
-        base = "该资讯涉及" + "、".join(summary_parts[:6]) + "等方向。"
+    if "bank" in lowered or "banking" in lowered or "银行" in lowered:
+        actor = "银行团队"
+    elif "broker" in lowered or "券商" in lowered or "证券" in lowered:
+        actor = "券商团队"
+    elif "insurance" in lowered or "保险" in lowered:
+        actor = "保险团队"
+    elif "asset management" in lowered or "资管" in lowered or "基金" in lowered:
+        actor = "资管团队"
     else:
-        base = "该资讯与金融机构的 AI 应用、效率提升或风险治理相关。"
-    return base[:max_chars].rstrip("，。；;,. ") + ("…" if len(base) > max_chars else "")
+        actor = "金融业务团队"
+
+    business_actions = []
+    action_map = [
+        ("compliance", "用于合规审查"),
+        ("underwriting", "用于信贷审批"),
+        ("customer onboarding", "用于客户准入"),
+        ("risk", "用于风险识别"),
+        ("fraud", "用于欺诈识别"),
+        ("customer service", "用于客服提效"),
+        ("research", "用于投研支持"),
+        ("report", "用于报告生成"),
+        ("efficiency", "帮助缩短人工处理时间"),
+        ("agent", "通过智能体自动处理部分流程"),
+    ]
+    for key, phrase in action_map:
+        if key in lowered and phrase not in business_actions:
+            business_actions.append(phrase)
+    if not business_actions:
+        if summary_parts:
+            base = f"适合{actor}关注，可用于" + "、".join(summary_parts[:3]) + "相关工作。"
+        else:
+            base = f"适合{actor}关注，重点在 AI 落地、流程提效或风险治理。"
+    else:
+        base = f"适合{actor}关注，" + "，".join(business_actions[:3]) + "。"
+    trimmed = base[: max_chars - 1].rstrip("，。；;,. ") if len(base) > max_chars else base
+    return trimmed + ("…" if len(base) > max_chars else "")
 
 
 def summarize_item(item: dict) -> str:
@@ -658,7 +723,7 @@ def build_candidate_items(items: List[dict], limit: int = DEFAULT_CANDIDATE_LIMI
         if looks_like_low_value_page(item):
             continue
         enriched.append({
-            "title": normalize_text(item.get("title") or "未命名资讯"),
+            "title": translate_title_for_cn(normalize_text(item.get("title") or "未命名资讯")),
             "summary": shorten_summary(item.get("summary") or summarize_item(item), max_chars=80),
             "url": canonicalize_url(item.get("url") or ""),
             "source": normalize_text(item.get("source") or hostname_from_url(item.get("url") or "") or "unknown"),
@@ -683,7 +748,7 @@ def choose_selected_items(relevant_items: List[dict], fallback_items: List[dict]
     fallback_ranked = []
     for item in fallback_items:
         fallback_ranked.append({
-            "title": normalize_text(item.get("title") or "未命名资讯"),
+            "title": translate_title_for_cn(normalize_text(item.get("title") or "未命名资讯")),
             "summary": shorten_summary(item.get("summary") or summarize_item(item), max_chars=80),
             "url": canonicalize_url(item.get("url") or ""),
             "source": normalize_text(item.get("source") or hostname_from_url(item.get("url") or "") or "unknown"),
@@ -721,11 +786,14 @@ def choose_fun_facts() -> List[str]:
 def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[str], candidate_items: Optional[List[dict]] = None, search_query: str = "") -> str:
     selected_cards = []
     for idx, item in enumerate(items, start=1):
+        number_icon = f"<div class=\"num\">{idx}</div>"
         selected_cards.append(f"""
-        <section class=\"card selected\">
-          <h3><a href=\"{html.escape(item['url'])}\" target=\"_blank\">{html.escape(item['title'])}</a></h3>
-          <p>{html.escape(item['summary'])}</p>
-          <div class=\"chip-row\"><span class=\"chip\">价值分 {item['score']}</span></div>
+        <section class=\"card selected row-card\">
+          {number_icon}
+          <div class=\"content\">
+            <h3><a href=\"{html.escape(item['url'])}\" target=\"_blank\">{html.escape(item['title'])}</a></h3>
+            <p>{html.escape(item['summary'])}</p>
+          </div>
         </section>
         """)
 
@@ -760,18 +828,17 @@ def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[
     .query-badge {{ display: inline-flex; margin-top: 14px; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,0.14); font-size: 13px; }}
     .section-title {{ font-size: 22px; margin: 28px 0 14px; }}
     .section-note {{ margin: -6px 0 16px; color: var(--muted); font-size: 14px; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }}
+    .grid {{ display: flex; flex-direction: column; gap: 14px; }}
     .card {{ background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06); }}
+    .row-card {{ display: flex; align-items: flex-start; gap: 14px; }}
+    .num {{ width: 34px; height: 34px; flex: 0 0 34px; border-radius: 999px; background: #1d4ed8; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }}
+    .content {{ flex: 1; min-width: 0; }}
     .candidate {{ background: #f8fafc; }}
     .selected {{ background: #ffffff; border-color: #dbeafe; }}
     .card h3 {{ margin: 8px 0 10px; font-size: 19px; line-height: 1.45; }}
     .card p {{ margin: 0; line-height: 1.7; color: #374151; }}
-    .meta {{ font-size: 13px; color: var(--muted); }}
-    .chip-row {{ margin-top: 12px; }}
-    .chip {{ display: inline-flex; padding: 4px 10px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 12px; }}
     a {{ color: var(--accent); text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
-    .link {{ margin-top: 14px; font-size: 14px; }}
     .fun {{ background: #fffdf3; border: 1px solid #f5e6a8; }}
     .fun ul {{ margin: 0; padding-left: 22px; line-height: 1.8; }}
     .footer {{ margin-top: 28px; color: var(--muted); font-size: 13px; }}

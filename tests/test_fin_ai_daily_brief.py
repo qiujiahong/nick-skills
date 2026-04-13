@@ -204,6 +204,50 @@ class FinAiDailyBriefTests(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]["title"], "昨天的金融 AI 资讯")
 
+    def test_translate_title_makes_english_titles_chinese_friendly(self):
+        translated = module.translate_title_for_cn("AI fintech startup Round raises $6 million")
+        self.assertTrue(module.contains_chinese(translated))
+        self.assertNotEqual(translated, "AI fintech startup Round raises $6 million")
+
+    def test_shorten_summary_prefers_business_focused_chinese(self):
+        source = "The startup helps banks automate compliance reviews, reduce manual underwriting work, and improve customer onboarding efficiency with AI agents."
+        shortened = module.shorten_summary(source, max_chars=80)
+        self.assertLessEqual(len(shortened), 80)
+        self.assertTrue(any(term in shortened for term in ["银行", "合规", "风控", "效率", "业务"]))
+        self.assertNotIn("该资讯涉及", shortened)
+
+    def test_build_html_uses_single_column_with_number_icons_and_no_score(self):
+        selected = [
+            {
+                "title": "某银行部署 AI 风控",
+                "summary": "帮助信贷审批团队提升风控识别效率，并减少人工复核压力。",
+                "url": "https://example.com/selected",
+                "source": "example.com",
+                "published_date": "2026-04-13",
+                "score": 42,
+            },
+            {
+                "title": "某券商升级投研智能体",
+                "summary": "帮助研究团队更快汇总财报信息，并缩短日报产出时间。",
+                "url": "https://example.com/selected2",
+                "source": "example.com",
+                "published_date": "2026-04-13",
+                "score": 35,
+            },
+        ]
+        html = module.build_html(
+            date_str="2026-04-13",
+            overview="今天重点关注金融企业中的 AI 落地。",
+            items=selected,
+            fun_facts=["事实1", "事实2", "事实3"],
+            candidate_items=[],
+            search_query="金融 AI",
+        )
+        self.assertNotIn("价值分", html)
+        self.assertTrue(any(marker in html for marker in ["1", "①", "#1"]))
+        self.assertIn("某银行部署 AI 风控", html)
+        self.assertIn("某券商升级投研智能体", html)
+
 
 if __name__ == "__main__":
     unittest.main()
