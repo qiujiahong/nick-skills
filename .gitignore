@@ -24,3 +24,7 @@ blog-output/
 secrets/
 credentials/
 tokens/
+
+# Python cache
+__pycache__/
+*.pyc

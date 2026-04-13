@@ -1,13 +1,17 @@
 # fin-ai-daily-brief
 
-面向金融机构与分析师的 AI 中文资讯日报 skill。
+面向金融企业的 AI 资讯日报 skill。
 
-它会自动完成：
+这个版本按你的要求调整为 **Google 搜索优先** 的工作流：
 
-1. 优先搜索 20 条“金融 + AI”中文资讯
-2. 筛选出最值得关注的 10 条
-3. 生成 HTML 页面
-4. 通过 SMTP 发给订阅邮箱
+1. 打开 `https://www.google.com/`
+2. 搜索 `金融 AI`
+3. **忽略赞助商搜索结果**
+4. **忽略 AI 概览**
+5. 取前 15 条自然结果，保留每条的：标题、URL、内容总结
+6. 对前 15 条再筛选出对金融企业更有价值的 10 条
+7. 生成单页面 HTML 前端
+8. 通过 SMTP 发送给订阅用户
 
 ## 目录结构
 
@@ -16,96 +20,114 @@ skills/fin-ai-daily-brief/
 ├── SKILL.md
 ├── README.md
 ├── .env.example
-└── scripts/
-    └── generate_fin_ai_brief.py
+├── .env.local.example
+├── .gitignore
+├── scripts/
+│   └── generate_fin_ai_brief.py
+└── output/
 ```
 
-## 环境变量
+## 配置
+
+### SMTP
+
+本地 `.env.local` 示例：
 
 ```bash
-# Tavily 搜索
-TAVILY_API_KEYS=tvly-key-1,tvly-key-2
-TAVILY_SEARCH_BASE_URL=https://api.tavily.com
-
-# SMTP
 FIN_AI_SMTP_HOST=smtp.163.com
 FIN_AI_SMTP_PORT=465
-FIN_AI_SMTP_USER=your_mail@163.com
-FIN_AI_SMTP_PASS=your_smtp_auth_code
-FIN_AI_SMTP_FROM=your_mail@163.com
+FIN_AI_SMTP_USER=qiujiahongde@163.com
+FIN_AI_SMTP_PASS=你的163邮箱SMTP授权码
+FIN_AI_SMTP_FROM=qiujiahongde@163.com
 FIN_AI_SMTP_USE_SSL=true
-
-# 默认订阅邮箱
 FIN_AI_SUBSCRIBERS=qiujiahongde@163.com
 ```
 
-## 快速开始
+### 可扩展订阅用户
 
-只生成本地文件：
-
-```bash
-python3 scripts/generate_fin_ai_brief.py --output-dir ./output
-```
-
-生成并发邮件：
+除 `FIN_AI_SUBSCRIBERS` 外，也支持单独的订阅文件：
 
 ```bash
-python3 scripts/generate_fin_ai_brief.py --output-dir ./output --send-email
+python3 scripts/generate_fin_ai_brief.py \
+  --input-results ./output/google-results.json \
+  --subscribers-file ./subscribers.txt \
+  --send-email
 ```
 
-## 邮件效果
+`subscribers.txt` 支持一行一个邮箱，也支持逗号 / 分号分隔。
 
-邮件正文为 HTML 页面，包含：
+## 推荐执行方式
 
-- 今日总览
-- 10 条高价值资讯卡片
-- 今日 AI 趣味知识三句话
+### A. 按你的要求，使用 Google 浏览器结果作为输入
 
-同时也会附带一个纯文本版本，方便邮件客户端回退显示。
+先把 Google 前 15 条自然结果整理成 JSON：
 
-## 默认搜索方向
+```json
+{
+  "query": "金融 AI",
+  "results": [
+    {
+      "title": "标题",
+      "url": "https://example.com/article",
+      "summary": "摘要",
+      "source": "example.com"
+    }
+  ]
+}
+```
 
-默认 query 偏向这些中文方向：
+然后生成页面并发邮件：
 
-- 中文金融 AI
-- 银行大模型
-- 券商 AI
-- 智能投研
-- 风控
-- 合规
-- 保险科技
-- 资管科技
-- 金融监管科技
+```bash
+python3 scripts/generate_fin_ai_brief.py \
+  --query "金融 AI" \
+  --input-results ./output/google-results.json \
+  --output-dir ./output \
+  --send-email
+```
 
-## 中文优先策略
+### B. 没有 Google 结果 JSON 时，回退到 Tavily 搜索
 
-当前版本已更新为优先搜索中文内容：
+```bash
+python3 scripts/generate_fin_ai_brief.py \
+  --query "金融 AI" \
+  --output-dir ./output \
+  --send-email
+```
 
-- 默认 query 增加“中文”限定
-- 使用中文关键词变体做多轮搜索
-- 对中文标题 / 中文摘要 / 中文站点加权
-- 对非中文内容做硬过滤，尽量避免英文泛资讯混入
+> 回退模式适合自动化验证；严格按 Google 工作流时，优先使用 `--input-results`。
 
-## 筛选逻辑
+## 输出产物
 
-不是简单按热度取前 10，而是按“对金融机构与分析师是否有实际价值”排序，优先保留：
+脚本会输出：
 
-- 中文金融机构真实案例
-- 可落地业务应用
-- 监管 / 合规相关变化
-- 投研 / 交易 / 客服 / 风控 / 运营效率提升
-- 基础设施和模型能力升级
+- `search-result.json`：本次输入来源信息
+- `candidates.json`：Google 前 15 条候选结果
+- `selected.json`：精选后的 10 条高价值资讯
+- `brief.html`：单页面前端 HTML
+- `brief.txt`：纯文本邮件回退版本
 
-## 说明
+## 页面结构
 
-当前实现优先使用 Tavily 搜索结果与本地规则打分，不依赖额外 LLM API，因此更容易部署。
+HTML 单页包含：
 
-如果后续你要升级成：
+- 顶部总览 Hero
+- Google 前 15 条结果
+- 精选 10 条高价值资讯
+- 今日 AI 趣味知识
 
-- 自动定时发送
-- 带后台管理订阅邮箱
-- 多模板主题样式
-- 接入数据库存历史简报
-- 输出到网页站点
+## 筛选原则
 
-可以继续在这个 skill 上扩展。
+精选 10 条时优先保留：
+
+- 银行、券商、保险、资管、支付、风控、合规、投研相关
+- 有明确业务落地价值
+- 有监管、治理、模型风险、运营效率意义
+- 对金融企业决策者、分析师、数字化团队更有参考价值
+
+降权或忽略：
+
+- 广告、软文、SEO 垃圾页
+- 泛娱乐 / 泛消费 AI
+- 与金融业务弱相关内容
+- 与金融企业应用场景无映射的资讯

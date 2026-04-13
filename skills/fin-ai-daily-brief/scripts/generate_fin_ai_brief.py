@@ -21,10 +21,11 @@ SKILL_DIR = SCRIPT_DIR.parent
 REPO_ROOT = SKILL_DIR.parent.parent
 TAVILY_SEARCH_SCRIPT = REPO_ROOT / "skills" / "tavily-search" / "scripts" / "tavily_search.py"
 
-DEFAULT_QUERY = "中文 金融 AI 应用 银行 券商 保险 资管 大模型 智能投研 风控 合规 AIAgent"
+DEFAULT_QUERY = "金融 AI"
 DEFAULT_TOPIC = "general"
 DEFAULT_TOP_K = 20
 DEFAULT_KEEP = 10
+DEFAULT_CANDIDATE_LIMIT = 15
 DEFAULT_COUNTRY = "china"
 DEFAULT_INCLUDE_DOMAINS = [
     "36kr.com",
@@ -62,7 +63,13 @@ DEFAULT_QUERY_VARIANTS = [
 MIN_SELECTED_ITEMS = 3
 MIN_SCORE_TO_KEEP = 18
 NOISY_HOSTS = {
-    "marketbeat.com", "insidermonkey.com", "gurufocus.com", "cbsnews.com", "hospitalitynet.org", "developingtelecoms.com", "chainstoreage.com"
+    "marketbeat.com",
+    "insidermonkey.com",
+    "gurufocus.com",
+    "cbsnews.com",
+    "hospitalitynet.org",
+    "developingtelecoms.com",
+    "chainstoreage.com",
 }
 
 HIGH_VALUE_TERMS = {
@@ -192,6 +199,87 @@ def load_local_env() -> None:
 load_local_env()
 
 
+def normalize_text(value: str) -> str:
+    return re.sub(r"\s+", " ", (value or "").strip())
+
+
+def contains_chinese(text: str) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+
+
+def hostname_from_url(url: str) -> str:
+    match = re.match(r"https?://([^/]+)", url or "")
+    return (match.group(1).lower() if match else "").replace("www.", "")
+
+
+def summarize_item(item: dict) -> str:
+    content = normalize_text(item.get("summary") or item.get("content") or item.get("raw_content") or "")
+    if not content:
+        return normalize_text(item.get("title") or "")[:120]
+    if len(content) > 140:
+        return content[:137].rstrip() + "..."
+    return content
+
+
+def split_recipients(raw: str) -> List[str]:
+    return [part.strip() for part in re.split(r"[,;\n]+", raw or "") if part.strip()]
+
+
+def dedupe_items(items: List[dict]) -> List[dict]:
+    seen = set()
+    output = []
+    for item in items:
+        url = normalize_text(item.get("url") or "")
+        title = normalize_text(item.get("title") or "")
+        key = url.lower() or title.lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        output.append(item)
+    return output
+
+
+def normalize_result_item(item: dict) -> Optional[dict]:
+    if not isinstance(item, dict):
+        return None
+    item_type = normalize_text(str(item.get("type") or item.get("result_type") or "")).lower()
+    if item.get("is_sponsored") or item.get("sponsored"):
+        return None
+    if item_type in {"ad", "ads", "sponsored", "ai_overview", "overview"}:
+        return None
+
+    title = normalize_text(item.get("title") or item.get("headline") or "")
+    url = normalize_text(item.get("url") or item.get("link") or "")
+    if not title or not url:
+        return None
+    if "/aclk?" in url or url.startswith("https://www.google.com/"):
+        return None
+
+    summary = normalize_text(item.get("summary") or item.get("snippet") or item.get("content") or item.get("raw_content") or "")
+    return {
+        "title": title,
+        "url": url,
+        "summary": summary,
+        "content": summary,
+        "published_date": normalize_text(item.get("published_date") or item.get("date") or ""),
+        "source": normalize_text(item.get("source") or hostname_from_url(url) or "unknown"),
+    }
+
+
+def load_input_results(path: Path, limit: int = DEFAULT_CANDIDATE_LIMIT) -> List[dict]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    results = payload.get("results", []) if isinstance(payload, dict) else payload
+    output = []
+    for item in results:
+        normalized = normalize_result_item(item)
+        if not normalized:
+            continue
+        output.append(normalized)
+        if len(output) >= limit:
+            break
+    return output
+
+
 def tavily_search(query: str, topic: str, max_results: int, country: str = "", include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None) -> dict:
     if not TAVILY_SEARCH_SCRIPT.exists():
         raise RuntimeError(f"tavily-search script not found: {TAVILY_SEARCH_SCRIPT}")
@@ -218,8 +306,8 @@ def tavily_search(query: str, topic: str, max_results: int, country: str = "", i
 
     try:
         result = json.loads(stdout)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"failed to parse tavily-search output: {e}; stderr={stderr}; stdout={stdout[:500]}")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"failed to parse tavily-search output: {exc}; stderr={stderr}; stdout={stdout[:500]}") from exc
 
     if country and topic == "general":
         result["country"] = country
@@ -234,13 +322,22 @@ def multi_search(primary_query: str, topic: str, target_count: int, country: str
     queries = [primary_query] + [q for q in DEFAULT_QUERY_VARIANTS if q != primary_query]
     all_results = []
     search_runs = []
-
     per_query = max(6, min(10, target_count))
+
     for query in queries:
         result = tavily_search(query, topic, per_query, country=country, include_domains=include_domains, exclude_domains=exclude_domains)
         search_runs.append(result)
         if result.get("ok"):
-            all_results.extend(result.get("response", {}).get("results", []))
+            for item in result.get("response", {}).get("results", []):
+                normalized = normalize_result_item(item) or normalize_result_item({
+                    "title": item.get("title"),
+                    "url": item.get("url"),
+                    "summary": item.get("content") or item.get("raw_content") or "",
+                    "published_date": item.get("published_date") or "",
+                    "source": hostname_from_url(item.get("url") or ""),
+                })
+                if normalized:
+                    all_results.append(normalized)
         if len(dedupe_items(all_results)) >= target_count * 2:
             break
 
@@ -254,48 +351,23 @@ def multi_search(primary_query: str, topic: str, target_count: int, country: str
         "include_domains": include_domains or [],
         "exclude_domains": exclude_domains or [],
         "search_runs": search_runs,
-        "response": {
-            "results": merged,
-        } if ok else {},
+        "response": {"results": merged} if ok else {},
     }
-
-
-def normalize_text(value: str) -> str:
-    return re.sub(r"\s+", " ", (value or "").strip())
-
-
-def hostname_from_url(url: str) -> str:
-    m = re.match(r"https?://([^/]+)", url or "")
-    return (m.group(1).lower() if m else "").replace("www.", "")
-
-
-def summarize_item(item: dict) -> str:
-    content = normalize_text(item.get("content") or item.get("raw_content") or "")
-    if not content:
-        title = normalize_text(item.get("title") or "")
-        return title[:120]
-    if len(content) > 140:
-        return content[:137].rstrip() + "..."
-    return content
-
-
-def contains_chinese(text: str) -> bool:
-    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
 
 
 def score_item(item: dict) -> int:
     title_text = normalize_text(item.get("title") or "").lower()
-    content_text = normalize_text(item.get("content") or item.get("raw_content") or "").lower()
+    content_text = normalize_text(item.get("summary") or item.get("content") or item.get("raw_content") or "").lower()
     host = hostname_from_url(item.get("url") or "")
     text = " ".join([title_text, content_text, host])
     score = 0
+
     for term, weight in HIGH_VALUE_TERMS.items():
         if term.lower() in text:
             score += weight
     for term, weight in LOW_VALUE_TERMS.items():
         if term.lower() in text:
             score += weight
-
     for domain, bonus in SOURCE_BONUS.items():
         if host.endswith(domain.replace("www.", "")):
             score += bonus
@@ -306,13 +378,11 @@ def score_item(item: dict) -> int:
     ai_terms = [
         "ai", "agent", "llm", "大模型", "人工智能", "模型", "机器学习", "automation", "copilot", "生成式"
     ]
-
     finance_hits = sum(1 for term in finance_terms if term.lower() in text)
     ai_hits = sum(1 for term in ai_terms if term.lower() in text)
 
     score += finance_hits * 3
     score += ai_hits * 2
-
     if finance_hits == 0:
         score -= 12
     if ai_hits == 0:
@@ -330,23 +400,9 @@ def score_item(item: dict) -> int:
     return score
 
 
-def dedupe_items(items: List[dict]) -> List[dict]:
-    seen = set()
-    output = []
-    for item in items:
-        url = normalize_text(item.get("url") or "")
-        title = normalize_text(item.get("title") or "")
-        key = (url.lower() or title.lower())
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        output.append(item)
-    return output
-
-
 def is_relevant_fin_ai_item(item: dict) -> bool:
     title = normalize_text(item.get("title") or "")
-    content = normalize_text(item.get("content") or item.get("raw_content") or "")
+    content = normalize_text(item.get("summary") or item.get("content") or item.get("raw_content") or "")
     text = f"{title} {content}".lower()
     host = hostname_from_url(item.get("url") or "")
 
@@ -362,6 +418,7 @@ def is_relevant_fin_ai_item(item: dict) -> bool:
     business_terms = [
         "underwriting", "claims", "fraud", "risk", "compliance", "governance", "loan", "lending", "wealth", "portfolio", "payments", "customer service", "投研", "风控", "合规", "承保", "理赔", "贷款", "支付", "财富管理", "投顾", "客服"
     ]
+
     finance_hits = sum(1 for term in finance_terms if term.lower() in text)
     ai_hits = sum(1 for term in ai_terms if term.lower() in text)
     noise_hits = sum(1 for term in noise_terms if term in text)
@@ -389,19 +446,22 @@ def is_relevant_fin_ai_item(item: dict) -> bool:
     return high_signal or score >= MIN_SCORE_TO_KEEP + 12
 
 
-def select_top_items(items: List[dict], keep: int) -> List[dict]:
-    enriched = []
-    for item in items:
-        summary = summarize_item(item)
-        score = score_item(item)
-        enriched.append({
+def build_candidate_items(items: List[dict], limit: int = DEFAULT_CANDIDATE_LIMIT) -> List[dict]:
+    candidates = []
+    for item in items[:limit]:
+        candidates.append({
             "title": normalize_text(item.get("title") or "未命名资讯"),
-            "summary": summary,
+            "summary": normalize_text(item.get("summary") or summarize_item(item)),
             "url": normalize_text(item.get("url") or ""),
-            "source": hostname_from_url(item.get("url") or "") or "unknown",
+            "source": normalize_text(item.get("source") or hostname_from_url(item.get("url") or "") or "unknown"),
             "published_date": item.get("published_date") or "",
-            "score": score,
+            "score": score_item(item),
         })
+    return candidates
+
+
+def select_top_items(items: List[dict], keep: int) -> List[dict]:
+    enriched = build_candidate_items(items, limit=len(items))
     enriched.sort(key=lambda x: (x["score"], x["published_date"]), reverse=True)
     return enriched[:keep]
 
@@ -420,16 +480,27 @@ def build_overview(selected: List[dict], date_str: str, query: str) -> str:
 
 
 def choose_fun_facts() -> List[str]:
-    facts = random.sample(FUN_FACTS, k=3) if len(FUN_FACTS) >= 3 else FUN_FACTS
-    return facts
+    return random.sample(FUN_FACTS, k=3) if len(FUN_FACTS) >= 3 else FUN_FACTS
 
 
-def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[str]) -> str:
-    cards = []
+def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[str], candidate_items: Optional[List[dict]] = None, search_query: str = "") -> str:
+    selected_cards = []
     for idx, item in enumerate(items, start=1):
-        cards.append(f"""
-        <section class=\"card\">
-          <div class=\"meta\">#{idx} · {html.escape(item['source'])}</div>
+        selected_cards.append(f"""
+        <section class=\"card selected\">
+          <div class=\"meta\">精选 #{idx} · {html.escape(item['source'])}</div>
+          <h3><a href=\"{html.escape(item['url'])}\" target=\"_blank\">{html.escape(item['title'])}</a></h3>
+          <p>{html.escape(item['summary'])}</p>
+          <div class=\"chip-row\"><span class=\"chip\">价值分 {item['score']}</span></div>
+          <div class=\"link\"><a href=\"{html.escape(item['url'])}\" target=\"_blank\">查看原文</a></div>
+        </section>
+        """)
+
+    candidate_cards = []
+    for idx, item in enumerate(candidate_items or [], start=1):
+        candidate_cards.append(f"""
+        <section class=\"card candidate\">
+          <div class=\"meta\">Google #{idx} · {html.escape(item['source'])}</div>
           <h3><a href=\"{html.escape(item['url'])}\" target=\"_blank\">{html.escape(item['title'])}</a></h3>
           <p>{html.escape(item['summary'])}</p>
           <div class=\"link\"><a href=\"{html.escape(item['url'])}\" target=\"_blank\">查看原文</a></div>
@@ -437,6 +508,7 @@ def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[
         """)
 
     facts_html = "".join(f"<li>{html.escape(fact)}</li>" for fact in fun_facts)
+    query_badge = f'<div class="query-badge">搜索词：{html.escape(search_query)}</div>' if search_query else ""
 
     return f"""<!doctype html>
 <html lang=\"zh-CN\">
@@ -452,19 +524,27 @@ def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[
       --muted: #6b7280;
       --accent: #2563eb;
       --border: #e5e7eb;
+      --hero1: #0f172a;
+      --hero2: #1d4ed8;
     }}
     * {{ box-sizing: border-box; }}
     body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); }}
-    .wrap {{ max-width: 960px; margin: 0 auto; padding: 32px 20px 48px; }}
-    .hero {{ background: linear-gradient(135deg, #0f172a, #1d4ed8); color: white; border-radius: 20px; padding: 28px; margin-bottom: 24px; }}
-    .hero h1 {{ margin: 0 0 10px; font-size: 32px; }}
-    .hero p {{ margin: 0; line-height: 1.7; color: rgba(255,255,255,0.92); }}
+    .wrap {{ max-width: 1100px; margin: 0 auto; padding: 32px 20px 48px; }}
+    .hero {{ background: linear-gradient(135deg, var(--hero1), var(--hero2)); color: white; border-radius: 22px; padding: 28px; margin-bottom: 24px; }}
+    .hero h1 {{ margin: 0 0 10px; font-size: 34px; }}
+    .hero p {{ margin: 0; line-height: 1.75; color: rgba(255,255,255,0.93); }}
+    .query-badge {{ display: inline-flex; margin-top: 14px; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,0.14); font-size: 13px; }}
     .section-title {{ font-size: 22px; margin: 28px 0 14px; }}
-    .grid {{ display: grid; gap: 16px; }}
+    .section-note {{ margin: -6px 0 16px; color: var(--muted); font-size: 14px; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }}
     .card {{ background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06); }}
-    .card h3 {{ margin: 8px 0 10px; font-size: 20px; line-height: 1.4; }}
+    .candidate {{ background: #f8fafc; }}
+    .selected {{ background: #ffffff; border-color: #dbeafe; }}
+    .card h3 {{ margin: 8px 0 10px; font-size: 19px; line-height: 1.45; }}
     .card p {{ margin: 0; line-height: 1.7; color: #374151; }}
     .meta {{ font-size: 13px; color: var(--muted); }}
+    .chip-row {{ margin-top: 12px; }}
+    .chip {{ display: inline-flex; padding: 4px 10px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 12px; }}
     a {{ color: var(--accent); text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
     .link {{ margin-top: 14px; font-size: 14px; }}
@@ -478,34 +558,40 @@ def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[
     <div class=\"hero\">
       <h1>金融 AI 资讯简报</h1>
       <p>{html.escape(overview)}</p>
+      {query_badge}
     </div>
 
-    <h2 class=\"section-title\">今日 10 条重点资讯</h2>
-    <div class=\"grid\">
-      {''.join(cards)}
-    </div>
+    <h2 class=\"section-title\">Google 前 15 条结果</h2>
+    <div class=\"section-note\">已忽略赞助商结果与 AI 概览，仅保留可读网页结果。</div>
+    <div class=\"grid\">{''.join(candidate_cards)}</div>
+
+    <h2 class=\"section-title\">精选 10 条高价值资讯</h2>
+    <div class=\"section-note\">从前 15 条候选里筛选出对金融企业更有价值的内容。</div>
+    <div class=\"grid\">{''.join(selected_cards)}</div>
 
     <h2 class=\"section-title\">今日 AI 趣味知识</h2>
-    <section class=\"card fun\">
-      <ul>{facts_html}</ul>
-    </section>
+    <section class=\"card fun\"><ul>{facts_html}</ul></section>
 
-    <div class=\"footer\">本简报由 fin-ai-daily-brief 自动生成。</div>
+    <div class=\"footer\">本简报由 fin-ai-daily-brief 自动生成，可继续扩展订阅用户列表。</div>
   </div>
 </body>
 </html>
 """
 
 
-def build_text(date_str: str, overview: str, items: List[dict], fun_facts: List[str]) -> str:
-    lines = [
-        f"金融 AI 资讯简报 - {date_str}",
-        "",
-        "总览：",
-        overview,
-        "",
-        "今日 10 条重点资讯：",
-    ]
+def build_text(date_str: str, overview: str, items: List[dict], fun_facts: List[str], candidate_items: Optional[List[dict]] = None, search_query: str = "") -> str:
+    lines = [f"金融 AI 资讯简报 - {date_str}", ""]
+    if search_query:
+        lines.extend([f"搜索词：{search_query}", ""])
+    lines.extend(["总览：", overview, "", "Google 前 15 条结果："])
+    for idx, item in enumerate(candidate_items or [], start=1):
+        lines.extend([
+            f"{idx}. {item['title']}",
+            f"   简述：{item['summary']}",
+            f"   链接：{item['url']}",
+            "",
+        ])
+    lines.append("精选 10 条高价值资讯：")
     for idx, item in enumerate(items, start=1):
         lines.extend([
             f"{idx}. {item['title']}",
@@ -522,10 +608,15 @@ def build_text(date_str: str, overview: str, items: List[dict], fun_facts: List[
 
 
 def parse_recipients(extra: List[str]) -> List[str]:
-    raw = os.environ.get("FIN_AI_SUBSCRIBERS", "")
-    parts = re.split(r"[,;\n]+", raw)
-    emails = [p.strip() for p in parts if p.strip()]
+    emails: List[str] = []
+    subscriber_file = os.environ.get("FIN_AI_SUBSCRIBERS_FILE", "").strip()
+    if subscriber_file:
+        file_path = Path(subscriber_file)
+        if file_path.exists():
+            emails.extend(split_recipients(file_path.read_text(encoding="utf-8")))
+    emails.extend(split_recipients(os.environ.get("FIN_AI_SUBSCRIBERS", "")))
     emails.extend([item.strip() for item in extra if item.strip()])
+
     deduped = []
     seen = set()
     for email in emails:
@@ -547,7 +638,7 @@ def send_email(subject: str, html_body: str, text_body: str, recipients: List[st
     if not all([host, port, user, password, sender]):
         raise RuntimeError("SMTP config incomplete: FIN_AI_SMTP_HOST/PORT/USER/PASS/FROM required")
     if not recipients:
-        raise RuntimeError("No recipients configured. Set FIN_AI_SUBSCRIBERS or use --recipient")
+        raise RuntimeError("No recipients configured. Set FIN_AI_SUBSCRIBERS / FIN_AI_SUBSCRIBERS_FILE or use --recipient")
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -581,7 +672,10 @@ def main() -> int:
     parser.add_argument("--include-domain", action="append", default=[])
     parser.add_argument("--exclude-domain", action="append", default=[])
     parser.add_argument("--output-dir", default="./output")
+    parser.add_argument("--input-results", default="")
+    parser.add_argument("--candidate-limit", type=int, default=DEFAULT_CANDIDATE_LIMIT)
     parser.add_argument("--recipient", action="append", default=[])
+    parser.add_argument("--subscribers-file", default="")
     parser.add_argument("--send-email", action="store_true")
     parser.add_argument("--subject", default="")
     args = parser.parse_args()
@@ -589,52 +683,43 @@ def main() -> int:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    include_domains = args.include_domain or DEFAULT_INCLUDE_DOMAINS
-    exclude_domains = args.exclude_domain or DEFAULT_EXCLUDE_DOMAINS
-    search_result = multi_search(args.query, args.topic, args.top_k, country=args.country, include_domains=include_domains, exclude_domains=exclude_domains)
+    if args.subscribers_file:
+        os.environ["FIN_AI_SUBSCRIBERS_FILE"] = args.subscribers_file
+
+    if args.input_results:
+        input_path = Path(args.input_results)
+        raw_items = load_input_results(input_path, limit=args.candidate_limit)
+        search_result = {
+            "ok": True,
+            "query": args.query,
+            "source": "google-browser",
+            "input_results": str(input_path.resolve()),
+            "response": {"results": raw_items},
+        }
+    else:
+        include_domains = args.include_domain or DEFAULT_INCLUDE_DOMAINS
+        exclude_domains = args.exclude_domain or DEFAULT_EXCLUDE_DOMAINS
+        search_result = multi_search(args.query, args.topic, args.top_k, country=args.country, include_domains=include_domains, exclude_domains=exclude_domains)
+        if not search_result.get("ok"):
+            print(json.dumps(search_result, ensure_ascii=False, indent=2), file=sys.stderr)
+            return 1
+        raw_items = dedupe_items(search_result.get("response", {}).get("results", []))[: args.candidate_limit]
+
     (out_dir / "search-result.json").write_text(json.dumps(search_result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    if not search_result.get("ok"):
-        print(json.dumps(search_result, ensure_ascii=False, indent=2), file=sys.stderr)
-        return 1
-
-    raw_items = search_result.get("response", {}).get("results", [])
     deduped = dedupe_items(raw_items)
+    candidate_items = build_candidate_items(deduped, limit=args.candidate_limit)
     filtered = [item for item in deduped if is_relevant_fin_ai_item(item)]
-    if len(filtered) < MIN_SELECTED_ITEMS:
-        fallback_candidates = []
-        for item in deduped:
-            score = score_item(item)
-            text = normalize_text(item.get("title") or "") + " " + normalize_text(item.get("content") or item.get("raw_content") or "")
-            lower_text = text.lower()
-            has_cn = contains_chinese(text)
-            host = hostname_from_url(item.get("url") or "")
-            finance_hint = any(term in lower_text for term in ["银行", "券商", "证券", "保险", "资管", "基金", "金融", "fintech", "financial", "bank", "broker", "investment", "lending", "payments"])
-            ai_hint = any(term in lower_text for term in ["ai", "agent", "智能体", "llm", "大模型", "人工智能", "模型", "生成式", "copilot", "genai"])
-            business_hits = sum(1 for term in ["underwriting", "claims", "fraud", "risk", "compliance", "governance", "loan", "lending", "wealth", "portfolio", "payments", "customer service", "投研", "风控", "合规", "承保", "理赔", "贷款", "支付", "财富管理", "投顾", "客服"] if term in lower_text)
-            consumer_noise = any(term in lower_text for term in ["at home", "home helper", "order pizza", "travel booking", "grocery"])
-            if score >= MIN_SCORE_TO_KEEP and host not in NOISY_HOSTS and finance_hint and ai_hint and not consumer_noise and (business_hits >= 2 or score >= MIN_SCORE_TO_KEEP + 12 or (has_cn and business_hits >= 1)):
-                fallback_candidates.append(item)
-        fallback_candidates = dedupe_items(fallback_candidates)
-        filtered = fallback_candidates
+    if len(filtered) < args.keep:
+        filtered = deduped
     selected = select_top_items(filtered, args.keep)
-
-    candidates_view = []
-    for item in filtered:
-        candidates_view.append({
-            "title": normalize_text(item.get("title") or ""),
-            "summary": summarize_item(item),
-            "url": normalize_text(item.get("url") or ""),
-            "source": hostname_from_url(item.get("url") or ""),
-            "score": score_item(item),
-        })
 
     overview = build_overview(selected, args.date, args.query)
     fun_facts = choose_fun_facts()
-    html_doc = build_html(args.date, overview, selected, fun_facts)
-    text_doc = build_text(args.date, overview, selected, fun_facts)
+    html_doc = build_html(args.date, overview, selected, fun_facts, candidate_items=candidate_items, search_query=args.query)
+    text_doc = build_text(args.date, overview, selected, fun_facts, candidate_items=candidate_items, search_query=args.query)
 
-    (out_dir / "candidates.json").write_text(json.dumps(candidates_view, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (out_dir / "candidates.json").write_text(json.dumps(candidate_items, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (out_dir / "selected.json").write_text(json.dumps(selected, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (out_dir / "brief.html").write_text(html_doc, encoding="utf-8")
     (out_dir / "brief.txt").write_text(text_doc, encoding="utf-8")
