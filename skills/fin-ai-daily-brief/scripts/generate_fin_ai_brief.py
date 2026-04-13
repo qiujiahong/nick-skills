@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import datetime as dt
+import email.utils
 import html
 import json
 import os
@@ -258,13 +259,67 @@ def looks_like_low_value_page(item: dict) -> bool:
     return False
 
 
+def shorten_summary(text: str, max_chars: int = 80) -> str:
+    content = normalize_text(text)
+    if not content:
+        return ""
+    if contains_chinese(content):
+        trimmed = content[: max_chars - 1].rstrip("，。；;,. ") if len(content) > max_chars else content
+        return trimmed + ("…" if len(content) > max_chars else "")
+
+    replacements = {
+        "bank": "银行", "banking": "银行业", "insurance": "保险", "brokerage": "券商", "broker": "券商",
+        "asset management": "资管", "wealth": "财富管理", "risk control": "风控", "risk": "风险",
+        "compliance": "合规", "governance": "治理", "ai": "AI", "artificial intelligence": "人工智能",
+        "agent": "智能体", "llm": "大模型", "model": "模型", "payment": "支付", "payments": "支付",
+        "loan": "贷款", "lending": "信贷", "customer service": "客服", "efficiency": "效率"
+    }
+    lowered = content.lower()
+    summary_parts = []
+    for key, value in replacements.items():
+        if key in lowered and value not in summary_parts:
+            summary_parts.append(value)
+    if summary_parts:
+        base = "该资讯涉及" + "、".join(summary_parts[:6]) + "等方向。"
+    else:
+        base = "该资讯与金融机构的 AI 应用、效率提升或风险治理相关。"
+    return base[:max_chars].rstrip("，。；;,. ") + ("…" if len(base) > max_chars else "")
+
+
 def summarize_item(item: dict) -> str:
     content = normalize_text(item.get("summary") or item.get("content") or item.get("raw_content") or "")
     if not content:
-        return normalize_text(item.get("title") or "")[:120]
-    if len(content) > 140:
-        return content[:137].rstrip() + "..."
-    return content
+        content = normalize_text(item.get("title") or "")
+    return shorten_summary(content, max_chars=80)
+
+
+def parse_published_date(value: str) -> Optional[dt.date]:
+    raw = normalize_text(value)
+    if not raw:
+        return None
+    for parser in (lambda s: dt.date.fromisoformat(s[:10]), lambda s: email.utils.parsedate_to_datetime(s).date()):
+        try:
+            return parser(raw)
+        except Exception:
+            pass
+    match = re.search(r"(20\d{2}-\d{2}-\d{2})", raw)
+    if match:
+        try:
+            return dt.date.fromisoformat(match.group(1))
+        except Exception:
+            return None
+    return None
+
+
+def filter_items_for_date(items: List[dict], report_date_str: str) -> List[dict]:
+    report_date = dt.date.fromisoformat(report_date_str)
+    target_date = report_date - dt.timedelta(days=1)
+    filtered = []
+    for item in items:
+        published = parse_published_date(item.get("published_date") or item.get("date") or "")
+        if published == target_date:
+            filtered.append(item)
+    return filtered
 
 
 def split_recipients(raw: str) -> List[str]:
@@ -367,7 +422,7 @@ def load_search_results(input_results: str, query: str, topic: str, candidate_li
         })
         if normalized:
             raw_items.append(normalized)
-    return raw_items[:candidate_limit], search_result
+    return raw_items, search_result
 
 
 def load_google_results(input_results: str, candidate_limit: int = DEFAULT_CANDIDATE_LIMIT) -> tuple[list[dict], dict]:
@@ -604,7 +659,7 @@ def build_candidate_items(items: List[dict], limit: int = DEFAULT_CANDIDATE_LIMI
             continue
         enriched.append({
             "title": normalize_text(item.get("title") or "未命名资讯"),
-            "summary": normalize_text(item.get("summary") or summarize_item(item)),
+            "summary": shorten_summary(item.get("summary") or summarize_item(item), max_chars=80),
             "url": canonicalize_url(item.get("url") or ""),
             "source": normalize_text(item.get("source") or hostname_from_url(item.get("url") or "") or "unknown"),
             "published_date": item.get("published_date") or "",
@@ -618,6 +673,32 @@ def select_top_items(items: List[dict], keep: int) -> List[dict]:
     enriched = build_candidate_items(items, limit=len(items))
     enriched.sort(key=lambda x: (x["score"], x["published_date"]), reverse=True)
     return enriched[:keep]
+
+
+def choose_selected_items(relevant_items: List[dict], fallback_items: List[dict], keep: int) -> List[dict]:
+    primary = select_top_items(relevant_items, keep)
+    if len(primary) >= keep:
+        return primary[:keep]
+    used = {item["url"] for item in primary}
+    fallback_ranked = []
+    for item in fallback_items:
+        fallback_ranked.append({
+            "title": normalize_text(item.get("title") or "未命名资讯"),
+            "summary": shorten_summary(item.get("summary") or summarize_item(item), max_chars=80),
+            "url": canonicalize_url(item.get("url") or ""),
+            "source": normalize_text(item.get("source") or hostname_from_url(item.get("url") or "") or "unknown"),
+            "published_date": item.get("published_date") or "",
+            "score": score_item(item),
+        })
+    fallback_ranked.sort(key=lambda x: (x["score"], x["published_date"]), reverse=True)
+    for item in fallback_ranked:
+        if not item["url"] or item["url"] in used:
+            continue
+        primary.append(item)
+        used.add(item["url"])
+        if len(primary) >= keep:
+            break
+    return primary[:keep]
 
 
 def build_overview(selected: List[dict], date_str: str, query: str) -> str:
@@ -642,24 +723,13 @@ def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[
     for idx, item in enumerate(items, start=1):
         selected_cards.append(f"""
         <section class=\"card selected\">
-          <div class=\"meta\">精选 #{idx} · {html.escape(item['source'])}</div>
           <h3><a href=\"{html.escape(item['url'])}\" target=\"_blank\">{html.escape(item['title'])}</a></h3>
           <p>{html.escape(item['summary'])}</p>
           <div class=\"chip-row\"><span class=\"chip\">价值分 {item['score']}</span></div>
-          <div class=\"link\"><a href=\"{html.escape(item['url'])}\" target=\"_blank\">查看原文</a></div>
         </section>
         """)
 
     candidate_cards = []
-    for idx, item in enumerate(candidate_items or [], start=1):
-        candidate_cards.append(f"""
-        <section class=\"card candidate\">
-          <div class=\"meta\">Tavily #{idx} · {html.escape(item['source'])}</div>
-          <h3><a href=\"{html.escape(item['url'])}\" target=\"_blank\">{html.escape(item['title'])}</a></h3>
-          <p>{html.escape(item['summary'])}</p>
-          <div class=\"link\"><a href=\"{html.escape(item['url'])}\" target=\"_blank\">查看原文</a></div>
-        </section>
-        """)
 
     facts_html = "".join(f"<li>{html.escape(fact)}</li>" for fact in fun_facts)
     query_badge = f'<div class="query-badge">搜索词：{html.escape(search_query)}</div>' if search_query else ""
@@ -715,12 +785,6 @@ def build_html(date_str: str, overview: str, items: List[dict], fun_facts: List[
       {query_badge}
     </div>
 
-    <h2 class=\"section-title\">Tavily 搜索前 15 条结果</h2>
-    <div class=\"section-note\">按 Tavily 搜索结果保留前 15 条候选，并过滤广告/低价值页面。</div>
-    <div class=\"grid\">{''.join(candidate_cards)}</div>
-
-    <h2 class=\"section-title\">精选 10 条高价值资讯</h2>
-    <div class=\"section-note\">从前 15 条候选里筛选出对金融企业更有价值的内容。</div>
     <div class=\"grid\">{''.join(selected_cards)}</div>
 
     <h2 class=\"section-title\">今日 AI 趣味知识</h2>
@@ -737,15 +801,7 @@ def build_text(date_str: str, overview: str, items: List[dict], fun_facts: List[
     lines = [f"金融 AI 资讯简报 - {date_str}", ""]
     if search_query:
         lines.extend([f"搜索词：{search_query}", ""])
-    lines.extend(["总览：", overview, "", "Tavily 搜索前 15 条结果："])
-    for idx, item in enumerate(candidate_items or [], start=1):
-        lines.extend([
-            f"{idx}. {item['title']}",
-            f"   简述：{item['summary']}",
-            f"   链接：{item['url']}",
-            "",
-        ])
-    lines.append("精选 10 条高价值资讯：")
+    lines.extend(["总览：", overview, "", "资讯列表："])
     for idx, item in enumerate(items, start=1):
         lines.extend([
             f"{idx}. {item['title']}",
@@ -844,13 +900,12 @@ def main() -> int:
 
     (out_dir / "search-result.json").write_text(json.dumps(search_result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    deduped = dedupe_items(raw_items)
-    candidate_items = build_candidate_items(deduped, limit=args.candidate_limit)
+    dated_items = filter_items_for_date(raw_items, args.date)
+    deduped = dedupe_items(dated_items)
+    candidate_items = build_candidate_items(deduped, limit=min(args.candidate_limit, 10))
     filtered = [item for item in deduped if is_relevant_fin_ai_item(item)]
-    if len(filtered) < args.keep:
-        fallback_pool = [item for item in deduped if not looks_like_low_value_page(item)]
-        filtered = fallback_pool or deduped
-    selected = select_top_items(filtered, args.keep)
+    fallback_pool = [item for item in deduped if not looks_like_low_value_page(item)] or deduped
+    selected = choose_selected_items(filtered, fallback_pool, min(args.keep, 10))
 
     overview = build_overview(selected, args.date, args.query)
     fun_facts = choose_fun_facts()

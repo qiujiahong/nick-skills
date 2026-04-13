@@ -146,11 +146,63 @@ class FinAiDailyBriefTests(unittest.TestCase):
             search_query="金融 AI",
         )
 
-        self.assertIn("Tavily 搜索前 15 条结果", html)
-        self.assertIn("精选 10 条高价值资讯", html)
-        self.assertIn("Tavily 候选资讯", html)
+        self.assertNotIn("Tavily 搜索前 15 条结果", html)
+        self.assertNotIn("精选 10 条高价值资讯", html)
+        self.assertNotIn("Tavily 候选资讯", html)
         self.assertIn("某银行部署 AI 风控", html)
         self.assertIn("金融 AI", html)
+
+    def test_build_html_hides_candidate_section_meta_and_read_more_link(self):
+        selected = [
+            {
+                "title": "某银行部署 AI 风控",
+                "summary": "提升审批效率与风险识别能力。",
+                "url": "https://example.com/selected",
+                "source": "example.com",
+                "published_date": "2026-04-13",
+                "score": 42,
+            }
+        ]
+        html = module.build_html(
+            date_str="2026-04-13",
+            overview="今天重点关注金融企业中的 AI 落地。",
+            items=selected,
+            fun_facts=["事实1", "事实2", "事实3"],
+            candidate_items=[],
+            search_query="金融 AI",
+        )
+        self.assertNotIn("Tavily 搜索前 15 条结果", html)
+        self.assertNotIn("精选 10 条高价值资讯", html)
+        self.assertNotIn("从前 15 条候选里筛选出对金融企业更有价值的内容", html)
+        self.assertNotIn("查看原文", html)
+        self.assertNotIn("精选 #1", html)
+
+    def test_shorten_summary_returns_chinese_text_with_max_80_chars(self):
+        long_text = "这是一个很长的英文摘要 mixed with English context about AI in banking and risk control that should be summarized into concise Chinese text for executives."
+        shortened = module.shorten_summary(long_text, max_chars=80)
+        self.assertLessEqual(len(shortened), 80)
+        self.assertTrue(module.contains_chinese(shortened))
+
+    def test_build_candidate_items_only_keeps_yesterday_items(self):
+        items = [
+            {
+                "title": "昨天的金融 AI 资讯",
+                "summary": "银行用 AI 做风控。",
+                "url": "https://example.com/yesterday",
+                "source": "example.com",
+                "published_date": "Mon, 13 Apr 2026 09:57:31 GMT",
+            },
+            {
+                "title": "前天的金融 AI 资讯",
+                "summary": "银行用 AI 做客服。",
+                "url": "https://example.com/older",
+                "source": "example.com",
+                "published_date": "Sun, 12 Apr 2026 09:57:31 GMT",
+            },
+        ]
+        filtered = module.filter_items_for_date(items, "2026-04-14")
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["title"], "昨天的金融 AI 资讯")
 
 
 if __name__ == "__main__":
