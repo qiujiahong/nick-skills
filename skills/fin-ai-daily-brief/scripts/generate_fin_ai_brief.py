@@ -248,14 +248,14 @@ def normalize_result_item(item: dict) -> Optional[dict]:
     if item_type in {"ad", "ads", "sponsored", "ai_overview", "overview"}:
         return None
 
-    title = normalize_text(item.get("title") or item.get("headline") or "")
+    title = normalize_text(item.get("zh_title") or item.get("title") or item.get("headline") or "")
     url = normalize_text(item.get("url") or item.get("link") or "")
     if not title or not url:
         return None
     if "/aclk?" in url or url.startswith("https://www.google.com/"):
         return None
 
-    summary = normalize_text(item.get("summary") or item.get("snippet") or item.get("content") or item.get("raw_content") or "")
+    summary = normalize_text(item.get("zh_summary") or item.get("summary") or item.get("snippet") or item.get("content") or item.get("raw_content") or "")
     return {
         "title": title,
         "url": url,

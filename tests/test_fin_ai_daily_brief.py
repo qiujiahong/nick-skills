@@ -68,6 +68,29 @@ class FinAiDailyBriefTests(unittest.TestCase):
         self.assertEqual(loaded[0]["title"], "结果 1")
         self.assertEqual(loaded[-1]["title"], "结果 15")
 
+    def test_load_input_results_prefers_chinese_fields(self):
+        payload = {
+            "query": "金融 AI",
+            "results": [
+                {
+                    "title": "Generative AI in banking",
+                    "zh_title": "生成式 AI 在银行业中的应用",
+                    "url": "https://example.com/a",
+                    "summary": "English summary",
+                    "zh_summary": "中文摘要",
+                    "source": "example.com",
+                }
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "google-results.json"
+            input_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            loaded = module.load_input_results(input_path, limit=15)
+
+        self.assertEqual(loaded[0]["title"], "生成式 AI 在银行业中的应用")
+        self.assertEqual(loaded[0]["summary"], "中文摘要")
+
     def test_build_html_renders_google_candidates_and_selected_sections(self):
         selected = [
             {

@@ -67,9 +67,11 @@ python3 scripts/generate_fin_ai_brief.py \
   "query": "金融 AI",
   "results": [
     {
-      "title": "标题",
+      "title": "原始标题",
+      "zh_title": "中文标题",
       "url": "https://example.com/article",
-      "summary": "摘要",
+      "summary": "原始摘要",
+      "zh_summary": "中文摘要",
       "source": "example.com"
     }
   ]
