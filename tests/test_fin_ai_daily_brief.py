@@ -255,6 +255,21 @@ class FinAiDailyBriefTests(unittest.TestCase):
         self.assertIn("某银行部署 AI 风控", html)
         self.assertIn("某券商升级投研智能体", html)
 
+    def test_build_overview_uses_week_range(self):
+        selected = [
+            {
+                "title": "某银行部署 AI 风控",
+                "summary": "帮助信贷审批团队提升风控识别效率，并减少人工复核压力。",
+                "url": "https://example.com/selected",
+                "source": "example.com",
+                "published_date": "2026-04-13",
+                "score": 42,
+            }
+        ]
+        overview = module.build_overview(selected, "2026-04-14", "金融 AI")
+        self.assertIn("2026-04-07 - 2026-04-13", overview)
+        self.assertNotIn("2026-04-14 的金融 AI 简报", overview)
+
 
 if __name__ == "__main__":
     unittest.main()

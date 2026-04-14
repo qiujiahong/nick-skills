@@ -775,6 +775,13 @@ def choose_selected_items(relevant_items: List[dict], fallback_items: List[dict]
     return primary[:keep]
 
 
+def format_week_range(date_str: str) -> str:
+    report_date = dt.date.fromisoformat(date_str)
+    end_date = report_date - dt.timedelta(days=1)
+    start_date = report_date - dt.timedelta(days=7)
+    return f"{start_date.isoformat()} - {end_date.isoformat()}"
+
+
 def build_overview(selected: List[dict], date_str: str, query: str) -> str:
     focus_terms = []
     for item in selected:
@@ -783,9 +790,10 @@ def build_overview(selected: List[dict], date_str: str, query: str) -> str:
             if term.lower() in text and term not in focus_terms:
                 focus_terms.append(term)
     top_focus = "、".join(focus_terms[:5]) if focus_terms else "金融机构 AI 落地"
+    week_range = format_week_range(date_str)
     if not selected:
-        return f"{date_str} 的金融 AI 简报今天没有发现足够值得纳入的高信号资讯。当前更值得持续跟踪的方向，仍然是 {top_focus}、监管要求映射，以及分析与运营效率提升相关的实际应用。搜索主题为：{query}。"
-    return f"{date_str} 的金融 AI 简报聚焦 {top_focus} 等方向。整体看，真正值得金融机构关注的，不是泛 AI 热点，而是能映射到业务流程、监管要求和分析效率提升的实际应用。搜索主题为：{query}。"
+        return f"{week_range} 的金融 AI 简报暂时没有发现足够值得纳入的高信号资讯。当前更值得持续跟踪的方向，仍然是 {top_focus}、监管要求映射，以及分析与运营效率提升相关的实际应用。搜索主题为：{query}。"
+    return f"{week_range} 的金融 AI 简报聚焦 {top_focus} 等方向。整体看，真正值得金融机构关注的，不是泛 AI 热点，而是能映射到业务流程、监管要求和分析效率提升的实际应用。搜索主题为：{query}。"
 
 
 def choose_fun_facts() -> List[str]:
