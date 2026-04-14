@@ -183,26 +183,33 @@ class FinAiDailyBriefTests(unittest.TestCase):
         self.assertLessEqual(len(shortened), 80)
         self.assertTrue(module.contains_chinese(shortened))
 
-    def test_build_candidate_items_only_keeps_yesterday_items(self):
+    def test_filter_items_for_recent_week_keeps_chinese_only(self):
         items = [
             {
-                "title": "昨天的金融 AI 资讯",
+                "title": "一周内的中文金融 AI 资讯",
                 "summary": "银行用 AI 做风控。",
-                "url": "https://example.com/yesterday",
+                "url": "https://example.com/week-cn",
                 "source": "example.com",
                 "published_date": "Mon, 13 Apr 2026 09:57:31 GMT",
             },
             {
-                "title": "前天的金融 AI 资讯",
-                "summary": "银行用 AI 做客服。",
-                "url": "https://example.com/older",
+                "title": "Three days old English news",
+                "summary": "Bank uses AI agents for compliance.",
+                "url": "https://example.com/week-en",
                 "source": "example.com",
-                "published_date": "Sun, 12 Apr 2026 09:57:31 GMT",
+                "published_date": "Fri, 11 Apr 2026 09:57:31 GMT",
+            },
+            {
+                "title": "八天前的中文资讯",
+                "summary": "银行用 AI 做客服。",
+                "url": "https://example.com/old-cn",
+                "source": "example.com",
+                "published_date": "Sat, 05 Apr 2026 09:57:31 GMT",
             },
         ]
-        filtered = module.filter_items_for_date(items, "2026-04-14")
+        filtered = module.filter_items_for_window(items, "2026-04-14")
         self.assertEqual(len(filtered), 1)
-        self.assertEqual(filtered[0]["title"], "昨天的金融 AI 资讯")
+        self.assertEqual(filtered[0]["title"], "一周内的中文金融 AI 资讯")
 
     def test_translate_title_makes_english_titles_chinese_friendly(self):
         translated = module.translate_title_for_cn("AI fintech startup Round raises $6 million")

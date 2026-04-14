@@ -376,15 +376,24 @@ def parse_published_date(value: str) -> Optional[dt.date]:
     return None
 
 
-def filter_items_for_date(items: List[dict], report_date_str: str) -> List[dict]:
+def filter_items_for_window(items: List[dict], report_date_str: str, days: int = 7, chinese_only: bool = True) -> List[dict]:
     report_date = dt.date.fromisoformat(report_date_str)
-    target_date = report_date - dt.timedelta(days=1)
+    start_date = report_date - dt.timedelta(days=days)
     filtered = []
     for item in items:
         published = parse_published_date(item.get("published_date") or item.get("date") or "")
-        if published == target_date:
-            filtered.append(item)
+        if not published or not (start_date <= published < report_date):
+            continue
+        title = normalize_text(item.get("title") or "")
+        summary = normalize_text(item.get("summary") or item.get("content") or "")
+        if chinese_only and not (contains_chinese(title) or contains_chinese(summary)):
+            continue
+        filtered.append(item)
     return filtered
+
+
+def filter_items_for_date(items: List[dict], report_date_str: str) -> List[dict]:
+    return filter_items_for_window(items, report_date_str, days=1, chinese_only=False)
 
 
 def split_recipients(raw: str) -> List[str]:
@@ -967,7 +976,7 @@ def main() -> int:
 
     (out_dir / "search-result.json").write_text(json.dumps(search_result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    dated_items = filter_items_for_date(raw_items, args.date)
+    dated_items = filter_items_for_window(raw_items, args.date, days=7, chinese_only=True)
     deduped = dedupe_items(dated_items)
     candidate_items = build_candidate_items(deduped, limit=min(args.candidate_limit, 10))
     filtered = [item for item in deduped if is_relevant_fin_ai_item(item)]
